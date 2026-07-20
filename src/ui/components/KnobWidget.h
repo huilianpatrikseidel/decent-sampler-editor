@@ -3,6 +3,7 @@
 #include <QSvgRenderer>
 #include <functional>
 #include <QStringList>
+#include "ModSourceHelper.h"
 
 
 #include "ui/components/UiComponentsLibExport.h"
@@ -33,7 +34,7 @@ public:
     double modAmount() const { return m_modAmount; }
     void setModAmount(double amount);
     
-    using ModSourceProvider = std::function<QStringList()>;
+    using ModSourceProvider = std::function<QList<ModSourceHelper::ModSource>()>;
     void setModSourceProvider(ModSourceProvider provider) { m_modSourceProvider = provider; }
     
 signals:

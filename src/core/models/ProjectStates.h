@@ -8,6 +8,29 @@
 #include "AudioNodes.h" // For LFO
 #include "SequenceStructures.h"
 
+struct GlobalMacro {
+    QUuid id;
+    QString name = "Macro";
+    double value = 0.5;
+    
+    QJsonObject toJson() const {
+        QJsonObject obj;
+        obj["id"] = id.toString(QUuid::WithoutBraces);
+        obj["name"] = name;
+        obj["value"] = value;
+        return obj;
+    }
+    
+    static GlobalMacro fromJson(const QJsonObject& obj) {
+        GlobalMacro m;
+        if (obj.contains("id")) m.id = QUuid(obj["id"].toString());
+        else m.id = QUuid::createUuid();
+        m.name = obj["name"].toString("Macro");
+        m.value = obj["value"].toDouble(0.5);
+        return m;
+    }
+};
+
 enum class BgMode {
     Stretch,
     Center,
@@ -132,9 +155,16 @@ public:
     const QVector<KeyboardColor>& getKeyboardColors() const { return m_keyboardColors; }
     void setKeyboardColors(const QVector<KeyboardColor>& colors);
 
+    const QVector<GlobalMacro>& getGlobalMacros() const { return m_globalMacros; }
+    void setGlobalMacros(const QVector<GlobalMacro>& macros);
+    void addGlobalMacro(const GlobalMacro& macro);
+    void removeGlobalMacro(const QUuid& id);
+    void updateGlobalMacro(const QUuid& id, const GlobalMacro& macro);
+
 signals:
     void globalLfoChanged();
     void masterEffectsChanged();
+    void globalMacrosChanged();
     void audioStateModified(); // Triggered on any change
 
 private:
@@ -148,5 +178,6 @@ private:
     QVector<NoteSequence> m_noteSequences;
     std::unordered_map<QString, int> m_tagPolyphony;
     QVector<KeyboardColor> m_keyboardColors;
+    QVector<GlobalMacro> m_globalMacros;
     double m_editorBpm = 120.0;
 };

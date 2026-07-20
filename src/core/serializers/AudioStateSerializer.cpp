@@ -47,6 +47,12 @@ QJsonObject AudioStateSerializer::serialize(const AudioStateModel* audioState) {
     }
     state["keyboardColors"] = kbColorsArray;
     
+    QJsonArray macrosArray;
+    for (const auto& m : audioState->getGlobalMacros()) {
+        macrosArray.append(m.toJson());
+    }
+    state["globalMacros"] = macrosArray;
+    
     return state;
 }
 
@@ -125,5 +131,14 @@ void AudioStateSerializer::deserialize(AudioStateModel* audioState, const QJsonO
             colors.push_back(kc);
         }
         audioState->setKeyboardColors(colors);
+    }
+    
+    if (json.contains("globalMacros")) {
+        QJsonArray arr = json["globalMacros"].toArray();
+        QVector<GlobalMacro> macros;
+        for (int i = 0; i < arr.size(); ++i) {
+            macros.push_back(GlobalMacro::fromJson(arr[i].toObject()));
+        }
+        audioState->setGlobalMacros(macros);
     }
 }

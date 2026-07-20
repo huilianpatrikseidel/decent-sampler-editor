@@ -6,7 +6,7 @@
 #include <QVBoxLayout>
 #include "../../core/ThemePalette.h"
 
-RoutingPopupWidget::RoutingPopupWidget(SynthKnobWidget* knob, const QStringList& sources, const ModRouting& routing)
+RoutingPopupWidget::RoutingPopupWidget(SynthKnobWidget* knob, const QList<ModSourceHelper::ModSource>& sources, const QVector<ModRouting>& routings)
     : QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint),
       m_knob(knob)
 {
@@ -22,25 +22,78 @@ RoutingPopupWidget::RoutingPopupWidget(SynthKnobWidget* knob, const QStringList&
     layout->setContentsMargins(0, 0, 0, 0);
     
     QStringList destinations = {"Pitch", "Volume", "Pan", "Cutoff", "Resonance", "AmpEnv_Attack", "AmpEnv_Decay", "AmpEnv_Sustain", "AmpEnv_Release"};
-    ModRoutingWidget* rw = new ModRoutingWidget(routing, sources, destinations, true, contentWidget);
-    rw->setParameterLimits(knob->minimum(), knob->maximum());
-    rw->setBaseValue(knob->value());
     
-    layout->addWidget(rw);
+    // Separate sources into standard and macro
+    QList<ModSourceHelper::ModSource> stdSources;
+    QList<ModSourceHelper::ModSource> macroSources;
+    for (const auto& src : sources) {
+        if (src.id.startsWith("MACRO_")) macroSources.append(src);
+        else stdSources.append(src);
+    }
+    
+    // Find matching routings
+    ModRouting stdRouting, macroRouting;
+    for (const auto& r : routings) {
+        if (r.source.startsWith("MACRO_")) {
+            macroRouting = r;
+        } else if (!r.source.isEmpty()) {
+            stdRouting = r;
+        }
+    }
+    
+    if (stdRouting.destination.isEmpty() && !routings.isEmpty()) stdRouting.destination = routings.first().destination;
+    if (macroRouting.destination.isEmpty() && !routings.isEmpty()) macroRouting.destination = routings.first().destination;
+    
+    // 1. Standard Modulator Section
+    ModRoutingWidget* stdRw = new ModRoutingWidget(stdRouting, stdSources, destinations, true, contentWidget);
+    stdRw->setParameterLimits(knob->minimum(), knob->maximum());
+    stdRw->setBaseValue(knob->value());
+    
+    // 2. Separator
+    QFrame* sep = new QFrame();
+    sep->setFrameShape(QFrame::HLine);
+    sep->setStyleSheet("border: 1px solid rgba(255, 255, 255, 0.1); margin: 4px 0px;");
+    
+    // 3. Macro Section
+    ModRoutingWidget* macroRw = new ModRoutingWidget(macroRouting, macroSources, destinations, true, contentWidget);
+    macroRw->setParameterLimits(knob->minimum(), knob->maximum());
+    macroRw->setBaseValue(knob->value());
+    
+    layout->addWidget(stdRw);
+    layout->addWidget(sep);
+    layout->addWidget(macroRw);
+    
     mainLayout->addWidget(contentWidget);
     
-    // Handle changes from the RangeSlider inside ModRoutingWidget
-    connect(rw, &ModRoutingWidget::routingChanged, this, [this, knob](const ModRouting& newR) {
-        knob->setModRouting(newR);
-        emit knob->modulationChanged(newR);
+    auto updateRoutings = [this, stdRw, macroRw, knob]() {
+        QVector<ModRouting> newRoutings;
+        if (!stdRw->getRouting().source.isEmpty()) newRoutings.append(stdRw->getRouting());
+        if (!macroRw->getRouting().source.isEmpty()) newRoutings.append(macroRw->getRouting());
+        knob->setModRoutings(newRoutings);
+        emit knob->modRoutingsChanged(newRoutings);
+    };
+    
+    connect(stdRw, &ModRoutingWidget::routingChanged, this, [updateRoutings](const ModRouting&) { updateRoutings(); });
+    connect(macroRw, &ModRoutingWidget::routingChanged, this, [updateRoutings](const ModRouting&) { updateRoutings(); });
+    
+    connect(knob, &SynthKnobWidget::modRoutingsUpdatedExternally, this, [stdRw, macroRw](const QVector<ModRouting>& newRs) {
+        ModRouting stdR, macR;
+        for (const auto& r : newRs) {
+            if (r.source.startsWith("MACRO_")) macR = r;
+            else if (!r.source.isEmpty()) stdR = r;
+        }
+        stdRw->setRouting(stdR);
+        macroRw->setRouting(macR);
     });
     
-    connect(knob, &SynthKnobWidget::modRoutingUpdatedExternally, this, [rw](const ModRouting& newR) {
-        rw->setRouting(newR);
-    });
-    
-    connect(rw, &ModRoutingWidget::baseValueChanged, this, [this, knob](double newBase) {
+    connect(stdRw, &ModRoutingWidget::baseValueChanged, this, [this, knob, macroRw](double newBase) {
         knob->setValue(newBase);
+        macroRw->setBaseValue(newBase);
+    });
+    
+    connect(macroRw, &ModRoutingWidget::baseValueChanged, this, [this, knob, stdRw](double newBase) {
+        knob->setValue(newBase);
+        stdRw->setBaseValue(newBase);
     });
 }
 

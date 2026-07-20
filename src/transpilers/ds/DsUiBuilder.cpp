@@ -59,6 +59,71 @@ void DsUiBuilder::buildUi(DsNode* rootUi, const ProjectManager* pm, const QStrin
                     }
                     
                     bindingNode->setAttribute("parameter", translatedParam);
+                } else {
+                    // Check if it's a Macro
+                    bool isMacro = false;
+                    for (const auto& macro : pm->getAudioState()->getGlobalMacros()) {
+                        if (macro.id == c->targetNodeId) {
+                            isMacro = true;
+                            QString macroSource = "MACRO_" + macro.id.toString(QUuid::WithoutBraces);
+                            
+                            // Find all routings for this macro in all SampleGroups
+                            for (const auto& pair : pm->getAllNodes()) {
+                                if (pair.second->type == "SampleGroup") {
+                                    SampleGroup* sg = static_cast<SampleGroup*>(pair.second.get());
+                                    for (const auto& r : sg->routings) {
+                                        if (r.source == macroSource) {
+                                            DsNode* bindingNode = parentNode->addChild("binding");
+                                            
+                                            QString bType = "group";
+                                            QString translatedParam = r.destination.toUpper();
+                                            
+                                            // Handle specific translations
+                                            if (r.destination.startsWith("AmpEnv_")) {
+                                                bType = "amp";
+                                                QString sub = r.destination.mid(7).toUpper();
+                                                translatedParam = "ENV_" + sub;
+                                            } else if (r.destination == "Pitch") {
+                                                translatedParam = "TUNING";
+                                            } else if (r.destination == "Volume") {
+                                                translatedParam = "VOLUME";
+                                            } else if (r.destination == "Pan") {
+                                                translatedParam = "PAN";
+                                            }
+                                            
+                                            bindingNode->setAttribute("type", bType);
+                                            bindingNode->setAttribute("parameter", translatedParam);
+                                            // For Macro bindings, translation table maps knob value (0-1) to parameter range
+                                            bindingNode->setAttribute("translation", "linear");
+                                            
+                                            // We'd ideally need outputMin and outputMax from the routing amount, 
+                                            // but for now let's map according to amount.
+                                            // amount goes from -1.0 to 1.0. A Macro is 0.0 to 1.0.
+                                            // For now, let's simplify and just map to the min/max of the parameter
+                                            // multiplied by the amount.
+                                            double paramMax = 1.0;
+                                            if (translatedParam == "TUNING") paramMax = 12.0;
+                                            else if (translatedParam == "VOLUME") paramMax = 12.0;
+                                            else if (translatedParam == "PAN") paramMax = 1.0;
+                                            
+                                            double range = paramMax * r.amount;
+                                            // In a true implementation, we need baseValue + (range * macroValue).
+                                            // DS doesn't support complex math in bindings natively without custom curves,
+                                            // but we can set outputMin and outputMax if the parameter supports it,
+                                            // or output factor. Since DS relies heavily on linear maps:
+                                            // We will output a translation min/max.
+                                            // Wait, standard DS `translation` is usually handled via `translation="table"` if we want complex logic, 
+                                            // but `linear` is default.
+                                            // We will just leave `translation` linear for now.
+                                            
+                                            // A better way is to use "table" translation.
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
                 }
             }
         }

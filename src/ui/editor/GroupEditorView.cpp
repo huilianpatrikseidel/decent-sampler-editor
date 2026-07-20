@@ -8,6 +8,7 @@
 #include <QLineEdit>
 #include "../../commands/ModifyPropertyCommand.h"
 #include "../inspector/AdsrEditorView.h"
+#include "../components/EnvelopeGraphWidget.h"
 #include "../components/FilterSectionWidget.h"
 #include "../components/SynthKnobWidget.h"
 #include <QTableWidget>
@@ -18,7 +19,6 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QFormLayout>
-#include "../mapper/MacroPanelWidget.h"
 #include <QVBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -72,21 +72,6 @@ void GroupEditorView::rebuildForm() {
     
     SampleGroup* sg = static_cast<SampleGroup*>(node);
     bool isSynth = sg->isSynthContainer || sg->isOscillator;
-    
-    // --- Top Section: Macros (Synth Only) ---
-    QWidget* macrosWidget = nullptr;
-    if (isSynth) {
-        macrosWidget = new QWidget();
-        QVBoxLayout* macrosLayout = new QVBoxLayout(macrosWidget);
-        macrosLayout->setContentsMargins(0, 0, 0, 10);
-        
-        QLabel* macroTitle = new QLabel("<b>Synth Macros</b>");
-        macroTitle->setAlignment(Qt::AlignCenter);
-        macrosLayout->addWidget(macroTitle);
-        
-        MacroPanelWidget* macroPanel = new MacroPanelWidget();
-        macrosLayout->addWidget(macroPanel);
-    }
     
     // --- Lower Section: Columns ---
     QWidget* columnsWidget = new QWidget();
@@ -245,78 +230,82 @@ void GroupEditorView::rebuildForm() {
     auto createEnvTab = [&](const ADSR& env, const QString& propName) {
         QWidget* tab = new QWidget();
         QVBoxLayout* tabLayout = new QVBoxLayout(tab);
-        tabLayout->setContentsMargins(0, 0, 0, 0);
-        tabLayout->setSpacing(8);
+        tabLayout->setContentsMargins(15, 15, 15, 15);
+        tabLayout->setSpacing(10);
 
-        AdsrEditorView* adsrView = new AdsrEditorView();
-        adsrView->setAdsr(env, m_currentSgId);
-        tabLayout->addWidget(adsrView);
+        EnvelopeGraphWidget* envGraph = new EnvelopeGraphWidget();
+        envGraph->setParameters(env.attack, env.decay, env.sustain, env.release);
+        tabLayout->addWidget(envGraph);
 
-        QWidget* knobsPanel = new QWidget();
-        QHBoxLayout* knobsLayout = new QHBoxLayout(knobsPanel);
-        knobsLayout->setContentsMargins(0, 0, 0, 0);
-        knobsLayout->setSpacing(10);
+        QWidget* controlsBlock = new QWidget();
+        controlsBlock->setObjectName("NeumorphicControls");
+        controlsBlock->setAttribute(Qt::WA_StyledBackground, true);
+        controlsBlock->setFixedHeight(85);
+        QHBoxLayout* knobsLayout = new QHBoxLayout(controlsBlock);
+        knobsLayout->setContentsMargins(0, 10, 0, 10);
+        knobsLayout->setSpacing(16);
 
-        struct KnobDesc { QString label; double min; double max; double value; std::function<void(ADSR&, double)> setter; };
-        auto currentEnv = std::make_shared<ADSR>(env);
+        knobsLayout->addStretch();
+        
+        struct EnvState { double a, d, s, r; };
+        auto currentEnv = std::make_shared<EnvState>(EnvState{env.attack, env.decay, env.sustain, env.release});
 
         auto addEnvKnob = [&](const QString& label, double min, double max, double value, auto setter) {
-            QWidget* cell = new QWidget();
-            QVBoxLayout* cellLayout = new QVBoxLayout(cell);
-            cellLayout->setContentsMargins(0, 0, 0, 0);
-            cellLayout->setSpacing(4);
-            QLabel* fieldLabel = new QLabel(label);
-            fieldLabel->setStyleSheet("font-size: 12px; font-weight: 600;");
-            cellLayout->addWidget(fieldLabel, 0, Qt::AlignCenter);
+            QVBoxLayout* kl = new QVBoxLayout();
+            kl->setSpacing(2);
+            QLabel* nl = new QLabel(label);
+            nl->setStyleSheet("font-size: 12px; font-weight: 600;");
+            kl->addWidget(nl, 0, Qt::AlignCenter);
 
             SynthKnobWidget* knob = new SynthKnobWidget();
             knob->setFixedSize(36, 36);
             knob->setMinimum(min);
             knob->setMaximum(max);
+            double def = (label == "Sustain") ? 1.0 : 0.0;
+            knob->setDefaultValue(def);
             knob->setValue(value);
-            knob->setLogarithmic(label != "Sustain");
-            cellLayout->addWidget(knob, 0, Qt::AlignCenter);
+            
+            kl->addWidget(knob, 0, Qt::AlignCenter);
 
-            QLabel* valueLabel = new QLabel(QString::number(value, 'f', label == "Sustain" ? 2 : 2));
+            QLabel* valueLabel = new QLabel(QString::number(value, 'f', 2));
             valueLabel->setStyleSheet("font-size: 10px; font-family: Consolas, monospace;");
             valueLabel->setAlignment(Qt::AlignCenter);
-            cellLayout->addWidget(valueLabel, 0, Qt::AlignCenter);
+            kl->addWidget(valueLabel, 0, Qt::AlignCenter);
 
-            connect(knob, &SynthKnobWidget::valueChanged, this, [this, knob, valueLabel, currentEnv, setter, propName, pm, sg, adsrView](double v) {
+            connect(knob, &SynthKnobWidget::valueChanged, this, [this, knob, valueLabel, currentEnv, setter, propName, pm, sg, envGraph](double v) {
                 if (m_isUpdatingUI) return;
                 setter(*currentEnv, v);
-                valueLabel->setText(QString::number(v, 'f', qMax(2, knob->isLogarithmic() ? 2 : 2)));
-                adsrView->setAdsr(*currentEnv, m_currentSgId);
+                valueLabel->setText(QString::number(v, 'f', 2));
+                envGraph->setParameters(currentEnv->a, currentEnv->d, currentEnv->s, currentEnv->r);
+                
                 QJsonObject oldJson = sg->toJson();
                 SampleGroup newSg = *sg;
-                if (propName == "ampEnv") newSg.ampEnv = *currentEnv;
-                else newSg.modEnv = *currentEnv;
+                if (propName == "ampEnv") {
+                    newSg.ampEnv.attack = currentEnv->a;
+                    newSg.ampEnv.decay = currentEnv->d;
+                    newSg.ampEnv.sustain = currentEnv->s;
+                    newSg.ampEnv.release = currentEnv->r;
+                } else {
+                    newSg.modEnv.attack = currentEnv->a;
+                    newSg.modEnv.decay = currentEnv->d;
+                    newSg.modEnv.sustain = currentEnv->s;
+                    newSg.modEnv.release = currentEnv->r;
+                }
                 pm->getUndoStack()->push(new ModifyPropertyCommand(pm, m_currentSgId, propName, oldJson, newSg.toJson()));
             });
 
-            knobsLayout->addWidget(cell);
+            knobsLayout->addLayout(kl);
             return knob;
         };
 
-        SynthKnobWidget* attackKnob = addEnvKnob("Attack", 0.0, 5.0, env.attack, [](ADSR& e, double v){ e.attack = v; });
-        SynthKnobWidget* decayKnob = addEnvKnob("Decay", 0.0, 5.0, env.decay, [](ADSR& e, double v){ e.decay = v; });
-        SynthKnobWidget* sustainKnob = addEnvKnob("Sustain", 0.0, 1.0, env.sustain, [](ADSR& e, double v){ e.sustain = v; });
-        SynthKnobWidget* releaseKnob = addEnvKnob("Release", 0.0, 5.0, env.release, [](ADSR& e, double v){ e.release = v; });
+        addEnvKnob("Attack", 0.0, 10.0, env.attack, [](EnvState& e, double v){ e.a = v; });
+        addEnvKnob("Decay", 0.0, 10.0, env.decay, [](EnvState& e, double v){ e.d = v; });
+        addEnvKnob("Sustain", 0.0, 1.0, env.sustain, [](EnvState& e, double v){ e.s = v; });
+        addEnvKnob("Release", 0.0, 10.0, env.release, [](EnvState& e, double v){ e.r = v; });
 
-        connect(adsrView, &AdsrEditorView::adsrChanged, this, [this, sg, pm, propName, attackKnob, decayKnob, sustainKnob, releaseKnob](const QUuid& id, const ADSR& newAdsr) {
-            if (m_isUpdatingUI) return;
-            attackKnob->setValue(newAdsr.attack);
-            decayKnob->setValue(newAdsr.decay);
-            sustainKnob->setValue(newAdsr.sustain);
-            releaseKnob->setValue(newAdsr.release);
-            QJsonObject oldJson = sg->toJson();
-            SampleGroup newSg = *sg;
-            if (propName == "ampEnv") newSg.ampEnv = newAdsr;
-            else newSg.modEnv = newAdsr;
-            pm->getUndoStack()->push(new ModifyPropertyCommand(pm, m_currentSgId, propName, oldJson, newSg.toJson()));
-        });
-
-        tabLayout->addWidget(knobsPanel);
+        knobsLayout->addStretch();
+        tabLayout->addWidget(controlsBlock);
+        
         return tab;
     };
 
@@ -335,14 +324,7 @@ void GroupEditorView::rebuildForm() {
     columnsLayout->addWidget(filterWidgetContainer, 1);
     columnsLayout->addWidget(envelopesWidget, 2);
     
-    if (macrosWidget) {
-        QVBoxLayout* vLayout = new QVBoxLayout();
-        vLayout->addWidget(macrosWidget, 0);
-        vLayout->addWidget(columnsWidget, 1);
-        m_layout->addLayout(vLayout);
-    } else {
-        m_layout->addWidget(columnsWidget);
-    }
+    m_layout->addWidget(columnsWidget);
     
     m_isUpdatingUI = false;
 }

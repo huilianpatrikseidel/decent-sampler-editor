@@ -4,6 +4,9 @@
 #include <QPushButton>
 #include <QButtonGroup>
 #include <functional>
+#include "KnobWidget.h"
+#include "SynthKnobWidget.h"
+#include "ModSourceHelper.h"
 
 #include "ui/components/UiComponentsLibExport.h"
 class SynthKnobWidget;
@@ -26,7 +29,7 @@ public:
     double envDepth() const;
     double keyTrack() const;
     
-    using ModSourceProvider = std::function<QStringList()>;
+    using ModSourceProvider = std::function<QList<ModSourceHelper::ModSource>()>;
     void setModSourceProvider(ModSourceProvider provider);
     
     SynthKnobWidget* cutoffKnob() const { return m_cutoffKnob; }

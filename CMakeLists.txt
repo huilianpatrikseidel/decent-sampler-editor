@@ -383,6 +383,8 @@ set(APP_SOURCES
     src/ui/editor/SampleEditorContainer.cpp
     src/ui/editor/GroupEditorView.cpp
     src/ui/editor/ModulatorsView.cpp
+    src/ui/editor/MacrosView.h
+    src/ui/editor/MacrosView.cpp
     src/ui/waveform/WaveformEditorView.cpp
     src/ui/inspector/PropertiesInspector.cpp
     src/ui/inspector/strategies/NodeInspectorStrategy.cpp

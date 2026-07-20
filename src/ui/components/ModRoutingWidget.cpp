@@ -11,7 +11,7 @@
 #include "RangeSliderWidget.h"
 #include "CurveGraphWidget.h"
 
-ModRoutingWidget::ModRoutingWidget(const ModRouting& routing, const QStringList& sources, const QStringList& destinations, bool lockDestination, QWidget* parent)
+ModRoutingWidget::ModRoutingWidget(const ModRouting& routing, const QList<ModSourceHelper::ModSource>& sources, const QStringList& destinations, bool lockDestination, QWidget* parent)
     : QWidget(parent), m_routing(routing) 
 {
     // Make the entire widget a vertical card
@@ -28,9 +28,14 @@ ModRoutingWidget::ModRoutingWidget(const ModRouting& routing, const QStringList&
     QHBoxLayout* headerLayout = new QHBoxLayout();
     m_sourceCombo = new QComboBox();
     m_sourceCombo->setStyleSheet("QComboBox { background-color: #1a1a1c; border: 1px solid #a832ff; border-radius: 4px; padding: 2px; color: #d088ff; font-weight: bold; }");
-    m_sourceCombo->addItem("None");
-    for (const QString& src : sources) m_sourceCombo->addItem(src);
-    m_sourceCombo->setCurrentText(m_routing.source.isEmpty() ? "None" : m_routing.source);
+    m_sourceCombo->addItem("None", "");
+    for (const auto& src : sources) {
+        m_sourceCombo->addItem(src.displayName, src.id);
+    }
+    
+    int idx = m_sourceCombo->findData(m_routing.source);
+    if (idx >= 0) m_sourceCombo->setCurrentIndex(idx);
+    else m_sourceCombo->setCurrentIndex(0);
     headerLayout->addWidget(m_sourceCombo, 1);
 
     if (!lockDestination) {
@@ -129,7 +134,7 @@ ModRoutingWidget::ModRoutingWidget(const ModRouting& routing, const QStringList&
     // Initial state
     updateTranslationUI();
 
-    connect(m_sourceCombo, &QComboBox::currentTextChanged, this, [this]() { emitChange(); emit routingEditingFinished(getRouting()); });
+    connect(m_sourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emitChange(); emit routingEditingFinished(getRouting()); });
     if (m_destCombo) {
         connect(m_destCombo, &QComboBox::currentTextChanged, this, [this](const QString& fullDest) {
             QString dest = fullDest.split(" - ").first();
@@ -224,9 +229,8 @@ void ModRoutingWidget::updateTranslationUI() {
 ModRouting ModRoutingWidget::getRouting() const {
     ModRouting r = m_routing;
     
-    QString src = m_sourceCombo->currentText();
-    if (src == "None") r.source = "";
-    else r.source = src;
+    QString srcId = m_sourceCombo->currentData().toString();
+    r.source = srcId;
 
     if (m_destCombo) {
         QString fullDest = m_destCombo->currentText();
@@ -254,7 +258,9 @@ void ModRoutingWidget::emitChange() {
 void ModRoutingWidget::setRouting(const ModRouting& r) {
     m_isUpdatingUI = true;
     m_routing = r;
-    m_sourceCombo->setCurrentText(r.source.isEmpty() ? "None" : r.source);
+    int idx = m_sourceCombo->findData(r.source);
+    if (idx >= 0) m_sourceCombo->setCurrentIndex(idx);
+    else m_sourceCombo->setCurrentIndex(0);
     
     if (m_destCombo) {
         bool found = false;

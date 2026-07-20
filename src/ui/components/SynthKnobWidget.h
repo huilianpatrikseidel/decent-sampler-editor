@@ -4,6 +4,7 @@
 #include <functional>
 #include <QStringList>
 #include "../../core/models/GraphStructures.h"
+#include "ModSourceHelper.h"
 
 
 #include "ui/components/UiComponentsLibExport.h"
@@ -37,16 +38,16 @@ public:
     QString modDestination() const { return m_modDestination; }
     void setModDestination(const QString& dest) { m_modDestination = dest; }
     
-    ModRouting modRouting() const { return m_modRouting; }
-    void setModRouting(const ModRouting& routing);
+    QVector<ModRouting> modRoutings() const { return m_modRoutings; }
+    void setModRoutings(const QVector<ModRouting>& routings);
     
-    using ModSourceProvider = std::function<QStringList()>;
+    using ModSourceProvider = std::function<QList<ModSourceHelper::ModSource>()>;
     void setModSourceProvider(ModSourceProvider provider) { m_modSourceProvider = provider; }
     
 signals:
     void valueChanged(double newValue);
-    void modulationChanged(const ModRouting& routing);
-    void modRoutingUpdatedExternally(const ModRouting& routing);
+    void modRoutingsChanged(const QVector<ModRouting>& routings);
+    void modRoutingsUpdatedExternally(const QVector<ModRouting>& routings);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -76,6 +77,6 @@ private:
     QSvgRenderer m_indicatorRenderer;
     
     QString m_modDestination;
-    ModRouting m_modRouting;
+    QVector<ModRouting> m_modRoutings;
     ModSourceProvider m_modSourceProvider;
 };

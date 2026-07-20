@@ -55,9 +55,9 @@ void SynthKnobWidget::setMaximum(double max) {
     update();
 }
 
-void SynthKnobWidget::setModRouting(const ModRouting& routing) {
-    m_modRouting = routing;
-    emit modRoutingUpdatedExternally(m_modRouting);
+void SynthKnobWidget::setModRoutings(const QVector<ModRouting>& routings) {
+    m_modRoutings = routings;
+    emit modRoutingsUpdatedExternally(m_modRoutings);
     update();
 }
 
@@ -108,28 +108,37 @@ void SynthKnobWidget::paintEvent(QPaintEvent* event) {
     double normalizedValue = range > 0 ? (m_value - m_minimum) / range : 0;
     int valueSpanAngle = -270 * normalizedValue * 16; 
     
-    if (!m_modRouting.source.isEmpty() && m_modRouting.amount != 0.0) {
+    if (!m_modRoutings.isEmpty()) {
         QColor modColor = ThemePalette::color("knob_mod");
         QPen modPen;
         modPen.setColor(modColor);
         modPen.setWidth(2);
         modPen.setCapStyle(Qt::RoundCap);
         
-        double normalizedAmount = (range != 0.0) ? (m_modRouting.amount / range) : 0.0;
-        double modMin = normalizedValue;
-        double modMax = normalizedValue + normalizedAmount;
+        double minCombinedNorm = normalizedValue;
+        double maxCombinedNorm = normalizedValue;
         
-        if (m_modRouting.bipolar) {
-            modMin = normalizedValue - normalizedAmount;
-            modMax = normalizedValue + normalizedAmount;
+        for (const auto& r : m_modRoutings) {
+            if (r.source.isEmpty() || r.amount == 0.0) continue;
+            double normalizedAmount = (range != 0.0) ? (r.amount / range) : 0.0;
+            double rMin = normalizedValue;
+            double rMax = normalizedValue + normalizedAmount;
+            
+            if (r.bipolar) {
+                rMin = normalizedValue - normalizedAmount;
+                rMax = normalizedValue + normalizedAmount;
+            }
+            if (rMin > rMax) std::swap(rMin, rMax);
+            
+            if (rMin < minCombinedNorm) minCombinedNorm = rMin;
+            if (rMax > maxCombinedNorm) maxCombinedNorm = rMax;
         }
         
-        if (modMin > modMax) std::swap(modMin, modMax);
-        modMin = qBound(0.0, modMin, 1.0);
-        modMax = qBound(0.0, modMax, 1.0);
+        minCombinedNorm = qBound(0.0, minCombinedNorm, 1.0);
+        maxCombinedNorm = qBound(0.0, maxCombinedNorm, 1.0);
         
-        int modStartAngle = startAngle + qRound(-270.0 * modMin * 16.0);
-        int modSpanAngle = qRound(-270.0 * (modMax - modMin) * 16.0);
+        int modStartAngle = startAngle + qRound(-270.0 * minCombinedNorm * 16.0);
+        int modSpanAngle = qRound(-270.0 * (maxCombinedNorm - minCombinedNorm) * 16.0);
         
         painter.setPen(modPen);
         if (modSpanAngle != 0) {
@@ -153,7 +162,7 @@ void SynthKnobWidget::paintEvent(QPaintEvent* event) {
 
 void SynthKnobWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        if ((event->modifiers() & Qt::ControlModifier) && !m_modRouting.source.isEmpty()) {
+        if ((event->modifiers() & Qt::ControlModifier) && !m_modRoutings.isEmpty()) {
             m_modDragging = true;
         } else {
             m_dragging = true;
@@ -175,11 +184,12 @@ void SynthKnobWidget::mouseMoveEvent(QMouseEvent* event) {
         // Combine horizontal and vertical deltas
         int delta = deltaX + deltaY;
         
-        if (m_modDragging) {
+        if (m_modDragging && !m_modRoutings.isEmpty()) {
             double step = delta * 0.01;
             if (event->modifiers() & Qt::ShiftModifier) step *= 0.1;
-            m_modRouting.amount = qBound(-1.0, m_modRouting.amount + step, 1.0);
-            emit modulationChanged(m_modRouting);
+            // Adjust the first routing
+            m_modRoutings[0].amount = qBound(-1.0, m_modRoutings[0].amount + step, 1.0);
+            emit modRoutingsChanged(m_modRoutings);
             update();
         } else {
             double step = delta / 200.0; // 0.0 to 1.0 normalized delta
@@ -221,9 +231,9 @@ void SynthKnobWidget::mouseReleaseEvent(QMouseEvent* event) {
 
 void SynthKnobWidget::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        if (event->modifiers() & Qt::ControlModifier && !m_modRouting.source.isEmpty()) {
-            m_modRouting.amount = 0.0;
-            emit modulationChanged(m_modRouting);
+        if (event->modifiers() & Qt::ControlModifier && !m_modRoutings.isEmpty()) {
+            for (auto& r : m_modRoutings) r.amount = 0.0;
+            emit modRoutingsChanged(m_modRoutings);
             update();
         } else {
             setValue(m_defaultValue);
@@ -247,9 +257,22 @@ void SynthKnobWidget::dropEvent(QDropEvent* event) {
         QByteArray data = event->mimeData()->data("application/x-modsource");
         QString source = QString::fromUtf8(data);
         if (!source.isEmpty()) {
-            m_modRouting.source = source;
-            m_modRouting.amount = 0.5; // Default amount upon drag
-            emit modulationChanged(m_modRouting);
+            bool found = false;
+            for (auto& r : m_modRoutings) {
+                if (r.source == source) {
+                    r.amount = 0.5;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                ModRouting newR;
+                newR.source = source;
+                newR.destination = m_modDestination;
+                newR.amount = 0.5;
+                m_modRoutings.append(newR);
+            }
+            emit modRoutingsChanged(m_modRoutings);
             update();
         }
         event->acceptProposedAction();
@@ -261,12 +284,14 @@ void SynthKnobWidget::dropEvent(QDropEvent* event) {
 void SynthKnobWidget::contextMenuEvent(QContextMenuEvent* event) {
     if (!m_modSourceProvider) return;
     
-    QStringList sources = m_modSourceProvider();
+    QList<ModSourceHelper::ModSource> sources = m_modSourceProvider();
     
-    ModRouting r = m_modRouting;
-    r.destination = m_modDestination; // ensure destination is correctly set
+    QVector<ModRouting> routingsToPass = m_modRoutings;
+    for (auto& r : routingsToPass) {
+        if (r.destination.isEmpty()) r.destination = m_modDestination;
+    }
 
-    RoutingPopupWidget* popup = new RoutingPopupWidget(this, sources, r);
+    RoutingPopupWidget* popup = new RoutingPopupWidget(this, sources, routingsToPass);
     popup->adjustSize();
     
     // Center from the center of the knob, arrow pointing UP

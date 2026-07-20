@@ -9,9 +9,9 @@ QMenu { background-color: @qss_color_13; color: @qss_color_8; border: 1px solid 
 QMenu::item { padding: 4px 20px 4px 20px; border-radius: 0px; margin: 0px; border: none; }
 QMenu::item:selected { background-color: @qss_color_6; color: @qss_color_4; border: none; }
 QMenu::separator { height: 1px; background: @qss_color_14; margin: 4px 0px; }
-QTabWidget::pane { border: 1px solid @qss_color_9; background: @qss_color_15; top: -1px; }
-QTabBar::tab { background: @qss_color_1; color: @qss_color_17; padding: 8px 16px; border: 1px solid @qss_color_9; border-bottom: none; margin-right: 2px; }
-QTabBar::tab:selected { background: @qss_color_1; color: @qss_color_12; border-top: 2px solid @qss_color_6; }
+QTabWidget::pane { border: @card_inner_border; background: @card_inner_bg; border-radius: 8px; border-top-left-radius: 0px; top: -1px; }
+QTabBar::tab { background: @card_bg; color: @qss_color_17; padding: 8px 16px; border: @card_inner_border; border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }
+QTabBar::tab:selected { background: @card_inner_bg; color: @qss_color_6; border-top: 2px solid @qss_color_6; }
 QTabBar::tab:hover:!selected { background: @qss_color_18; color: @qss_color_19; }
 QPushButton { background-color: @qss_color_20; color: @qss_color_8; border: 1px solid @qss_color_9; padding: 6px 12px; border-radius: 4px; }
 QPushButton:hover { background-color: @qss_color_21; color: @qss_color_12; border: 1px solid @qss_color_6; }

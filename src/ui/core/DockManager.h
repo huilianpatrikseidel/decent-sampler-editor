@@ -13,6 +13,7 @@ class GroupEditorView;
 class MixerView;
 class FxRackView;
 class ModulatorsView;
+class MacrosView;
 class MenuManager;
 class UIDesignerView;
 class PresetListWidget;
@@ -60,13 +61,14 @@ private:
     
     QWidget* m_centralContainer;
     QWidget* m_editorPanel;
-    QTabWidget* m_editorTabs;
+    QTabWidget* m_editorTabs = nullptr;
     
     SampleEditorContainer* m_sampleEditorContainer = nullptr;
     GroupEditorView* m_groupEditorView = nullptr;
     MixerView* m_mixerView = nullptr;
     FxRackView* m_fxRackView = nullptr;
     ModulatorsView* m_modulatorsView = nullptr;
+    MacrosView* m_macrosView = nullptr;
     NoteSequenceEditorView* m_sequencerView = nullptr;
     
     QPushButton* m_collapseBtn;

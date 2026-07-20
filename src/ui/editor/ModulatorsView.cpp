@@ -168,7 +168,7 @@ void ModulatorsView::updateForm() {
                     else destinations.append(d);
                 }
                 
-                QStringList sources = ModSourceHelper::getAvailableSources(m_pm);
+                QList<ModSourceHelper::ModSource> sources = ModSourceHelper::getAvailableSources(m_pm);
                 ModRoutingWidget* routingWidget = new ModRoutingWidget(r, sources, destinations, false, slot);
                 
                 // Fetch the actual base value for this destination so the slider matches the knob

@@ -181,3 +181,37 @@ void AudioStateModel::setKeyboardColors(const QVector<KeyboardColor>& colors) {
     m_keyboardColors = colors;
     emit audioStateModified();
 }
+
+void AudioStateModel::setGlobalMacros(const QVector<GlobalMacro>& macros) {
+    m_globalMacros = macros;
+    emit globalMacrosChanged();
+    emit audioStateModified();
+}
+
+void AudioStateModel::addGlobalMacro(const GlobalMacro& macro) {
+    m_globalMacros.append(macro);
+    emit globalMacrosChanged();
+    emit audioStateModified();
+}
+
+void AudioStateModel::removeGlobalMacro(const QUuid& id) {
+    for (int i = 0; i < m_globalMacros.size(); ++i) {
+        if (m_globalMacros[i].id == id) {
+            m_globalMacros.removeAt(i);
+            emit globalMacrosChanged();
+            emit audioStateModified();
+            return;
+        }
+    }
+}
+
+void AudioStateModel::updateGlobalMacro(const QUuid& id, const GlobalMacro& macro) {
+    for (int i = 0; i < m_globalMacros.size(); ++i) {
+        if (m_globalMacros[i].id == id) {
+            m_globalMacros[i] = macro;
+            emit globalMacrosChanged();
+            emit audioStateModified();
+            return;
+        }
+    }
+}

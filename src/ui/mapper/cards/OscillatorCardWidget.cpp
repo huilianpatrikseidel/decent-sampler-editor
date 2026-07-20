@@ -165,55 +165,49 @@ OscillatorCardWidget::OscillatorCardWidget(ProjectManager* pm, SampleGroup* sg, 
         
         if (!modDest.isEmpty()) {
             knob->setModDestination(modDest);
+            QVector<ModRouting> currentRoutings;
             for (const ModRouting& r : sg->routings) {
                 if (r.destination == modDest || r.destination.startsWith(modDest + " - ")) {
-                    knob->setModRouting(r);
-                    break;
+                    currentRoutings.append(r);
                 }
             }
+            knob->setModRoutings(currentRoutings);
             
             connect(m_pm, &ProjectManager::nodeModified, knob, [this, knob, oscId, modDest](QUuid id, const QString& prop) {
                 if (id == oscId && prop == "routings") {
                     Node* n = m_pm->getNode(oscId);
                     if (n && n->type == "SampleGroup") {
                         SampleGroup* sg = static_cast<SampleGroup*>(n);
-                        bool found = false;
+                        QVector<ModRouting> currentRoutings;
                         for (const ModRouting& r : sg->routings) {
                             if (r.destination == modDest || r.destination.startsWith(modDest + " - ")) {
-                                knob->setModRouting(r);
-                                found = true;
-                                break;
+                                currentRoutings.append(r);
                             }
                         }
-                        if (!found) {
-                            ModRouting emptyR;
-                            emptyR.destination = modDest;
-                            knob->setModRouting(emptyR);
-                        }
+                        knob->setModRoutings(currentRoutings);
                     }
                 }
             });
             
-            connect(knob, &SynthKnobWidget::modulationChanged, this, [this, oscId](const ModRouting& newR) {
+            connect(knob, &SynthKnobWidget::modRoutingsChanged, this, [this, oscId, modDest](const QVector<ModRouting>& newRoutings) {
                 if (m_isUpdating) return;
                 Node* n = m_pm->getNode(oscId);
                 if (n && n->type == "SampleGroup") {
                     SampleGroup* sg = static_cast<SampleGroup*>(n);
                     auto copy = sg->routings;
-                    bool found = false;
-                    for (int i=0; i<copy.size(); ++i) {
-                        if (copy[i].destination == newR.destination) {
-                            if (newR.source.isEmpty()) {
-                                copy.removeAt(i);
-                            } else {
-                                copy[i] = newR;
-                            }
-                            found = true;
-                            break;
+                    
+                    // Remove old routings for this destination
+                    for (int i = copy.size() - 1; i >= 0; --i) {
+                        if (copy[i].destination == modDest || copy[i].destination.startsWith(modDest + " - ")) {
+                            copy.removeAt(i);
                         }
                     }
-                    if (!found && !newR.source.isEmpty()) {
-                        copy.append(newR);
+                    
+                    // Add new valid routings
+                    for (const auto& r : newRoutings) {
+                        if (!r.source.isEmpty()) {
+                            copy.append(r);
+                        }
                     }
                     
                     QJsonArray oldArr, newArr;

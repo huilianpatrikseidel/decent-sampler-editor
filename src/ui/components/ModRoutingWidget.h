@@ -11,11 +11,13 @@
 #include "RangeSliderWidget.h"
 
 
+#include "ModSourceHelper.h"
+
 #include "ui/components/UiComponentsLibExport.h"
 class UICOMPONENTSLIB_EXPORT ModRoutingWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit ModRoutingWidget(const ModRouting& routing, const QStringList& sources, const QStringList& destinations, bool lockDestination = false, QWidget* parent = nullptr);
+    explicit ModRoutingWidget(const ModRouting& routing, const QList<ModSourceHelper::ModSource>& sources, const QStringList& destinations, bool lockDestination = false, QWidget* parent = nullptr);
 
     ModRouting getRouting() const;
     void setRouting(const ModRouting& r);

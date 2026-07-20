@@ -59,6 +59,9 @@ void UiComponentInspectorStrategy::buildDataBindingForm(const UiComponent* comp,
         const auto& node = pair.second;
         nodeCombo->addItem(node->name.isEmpty() ? node->type : node->name, node->id);
     }
+    for (const auto& macro : inspector->getProjectManager()->getAudioState()->getGlobalMacros()) {
+        nodeCombo->addItem("[Macro] " + macro.name, macro.id);
+    }
     int idx = nodeCombo->findData(comp->targetNodeId);
     nodeCombo->setCurrentIndex(idx >= 0 ? idx : 0);
     

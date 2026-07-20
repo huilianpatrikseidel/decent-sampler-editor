@@ -12,6 +12,7 @@
 #include "../mapper/WaveformView.h"
 #include "../mixer/MixerView.h"
 #include "../editor/ModulatorsView.h"
+#include "../editor/MacrosView.h"
 #include "../../commands/ModifyPropertyCommand.h"
 #include "../../core/commands/ModifyZonePropertyCommand.h"
 #include "../../commands/UiCommands.h"
@@ -164,6 +165,10 @@ void DockManager::setupDocks() {
     m_mixerView->setAttribute(Qt::WA_StyledBackground, true);
     m_modulatorsView = new ModulatorsView(m_controller->getProjectManager(), m_editorPanel);
     m_modulatorsView->setAttribute(Qt::WA_StyledBackground, true);
+    m_modulatorsView->setObjectName("MainPanelContent");
+    m_macrosView = new MacrosView(m_controller->getProjectManager(), m_editorPanel);
+    m_macrosView->setAttribute(Qt::WA_StyledBackground, true);
+    m_macrosView->setObjectName("MainPanelContent");
     m_sequencerView = new NoteSequenceEditorView(m_controller, m_editorPanel);
     m_sequencerView->setAttribute(Qt::WA_StyledBackground, true);
     
@@ -175,6 +180,7 @@ void DockManager::setupDocks() {
             m_groupEditorView->hide();
             m_mixerView->hide();
             m_modulatorsView->hide();
+            m_macrosView->hide();
             m_sequencerView->hide();
             collapseHandle->setFixedHeight(0);
             m_collapseBtn->hide();
@@ -189,6 +195,7 @@ void DockManager::setupDocks() {
             m_groupEditorView->show();
             m_mixerView->show();
             m_modulatorsView->show();
+            m_macrosView->show();
             m_sequencerView->show();
             
             collapseHandle->setFixedHeight(16);
@@ -236,6 +243,7 @@ void DockManager::setupDocks() {
     m_editorTabs->addTab(m_sampleEditorContainer, "Sample Editor");
     m_editorTabs->addTab(m_mixerView, "Mixer & FX");
     m_editorTabs->addTab(m_modulatorsView, "Modulators");
+    m_editorTabs->addTab(m_macrosView, "Macros");
     m_editorTabs->addTab(m_sequencerView, "Sequencer");
     
     editorLayout->addWidget(m_editorTabs);
