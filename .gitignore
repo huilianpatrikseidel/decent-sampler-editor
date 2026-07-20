@@ -22,3 +22,7 @@ Deploy/
 vcpkg_installed/
 vcpkg/
 *.vst3
+
+out*.txt
+last_project.json
+scratch/
