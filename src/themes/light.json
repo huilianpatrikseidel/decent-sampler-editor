@@ -81,5 +81,11 @@
     "code_val": "#A31515",
     "code_tag": "#800000",
     "code_comment": "#008000",
-    "code_header": "#AF00DB"
+    "code_header": "#AF00DB",
+    "card_bg": "#F5F5F5",
+    "card_inner_bg": "#E8E8E8",
+    "card_controls_bg": "#FFFFFF",
+    "card_border": "1px solid #D0D0D0",
+    "card_inner_border": "1px solid #C0C0C0",
+    "knob_value_arc": "#ff6600"
 }

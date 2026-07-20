@@ -138,10 +138,10 @@ void SynthKnobWidget::paintEvent(QPaintEvent* event) {
     }
     
     QPen valuePen;
-    valuePen.setWidth(2);
+    valuePen.setWidth(4);
     valuePen.setCapStyle(Qt::RoundCap);
     
-    QColor indicatorColor = ThemePalette::color("knob_indicator");
+    QColor indicatorColor = ThemePalette::color("knob_value_arc", QColor(255, 102, 0));
     if (!isEnabled()) {
         indicatorColor = ThemePalette::color("knob_indicator_disabled");
     }

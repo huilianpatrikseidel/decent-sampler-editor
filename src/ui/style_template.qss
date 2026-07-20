@@ -50,20 +50,20 @@ QSplitter::handle:vertical { height: 4px; }
 
 /* Custom Synthesizer and Mod Matrix Styles - Flat/Sleek look */
 #NeumorphicCard, #ModSlot, #SeqStep {
-    background-color: @qss_color_15;
-    border: @neu_border_1;
+    background-color: @card_bg;
+    border: @card_border;
     border-radius: 12px;
 }
 
 #NeumorphicInner {
-    background-color: @qss_color_28;
-    border: @neu_border_2;
+    background-color: @card_inner_bg;
+    border: @card_inner_border;
     border-radius: 8px;
 }
 
 #NeumorphicControls {
-    background-color: @qss_color_1;
-    border: @neu_border_2;
+    background-color: @card_controls_bg;
+    border: @card_inner_border;
     border-radius: 8px;
 }
 
