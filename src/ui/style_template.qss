@@ -94,6 +94,20 @@ QSplitter::handle:vertical { height: 4px; }
     color: @qss_color_33;
 }
 
+#CardEnableToggle {
+    border-radius: 6px;
+    background-color: @qss_color_9;
+    border: 1px solid @qss_color_9;
+}
+#CardEnableToggle:checked {
+    background-color: @qss_color_6;
+    border: 1px solid @qss_color_6;
+}
+#CardEnableToggle:checked:disabled {
+    background-color: @qss_color_33;
+    border: 1px solid @qss_color_33;
+}
+
 #ModuleHeader {
     color: @qss_color_31;
     font-size: 14px;

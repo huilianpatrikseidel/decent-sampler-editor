@@ -22,24 +22,10 @@ SynthCardBase::SynthCardBase(const QString& titleText, std::function<void()> onD
     leftLayout->setContentsMargins(0, 0, 0, 0);
     
     m_enableToggle = new QPushButton();
+    m_enableToggle->setObjectName("CardEnableToggle");
     m_enableToggle->setCheckable(true);
     m_enableToggle->setFixedSize(12, 12);
     m_enableToggle->setCursor(Qt::PointingHandCursor);
-    m_enableToggle->setStyleSheet(
-        "QPushButton {"
-        "  border-radius: 6px;"
-        "  background-"
-        "  border: 1px solid #111;"
-        "}"
-        "QPushButton:checked {"
-        "  background-"
-        "  border: 1px solid #ff8833;"
-        "}"
-        "QPushButton:checked:disabled {"
-        "  background-color: rgba(255, 102, 0, 80);"
-        "  border: 1px solid rgba(255, 136, 51, 80);"
-        "}"
-    );
     connect(m_enableToggle, &QPushButton::toggled, this, &SynthCardBase::toggled);
     m_enableToggle->hide();
     
