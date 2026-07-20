@@ -1,0 +1,10 @@
+<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="24" height="24" rx="4" fill="#111" stroke="#000" stroke-width="1.5"/>
+  <!-- Bright active background -->
+  <rect x="4" y="4" width="20" height="20" rx="3" fill="#b71c1c" stroke="#d32f2f" stroke-width="1"/>
+  <text x="14" y="19" font-family="Arial" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">M</text>
+  <!-- LED on -->
+  <circle cx="22" cy="6" r="2" fill="#ff5252">
+    <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#ff5252" flood-opacity="1"/>
+  </circle>
+</svg>

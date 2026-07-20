@@ -1,0 +1,518 @@
+{
+    "activePresetIndex": 0,
+    "presets": [
+        {
+            "name": "Init",
+            "state": {
+                "connections": [
+                ],
+                "globalLfos": [
+                    {
+                        "amount": 0,
+                        "delayTime": 0,
+                        "enabled": true,
+                        "frequency": 1,
+                        "id": "67624c19-3971-4319-957d-c4c8f57996ed",
+                        "name": "LFO 1",
+                        "scope": "global",
+                        "shape": "sine"
+                    },
+                    {
+                        "amount": 0,
+                        "delayTime": 0,
+                        "enabled": true,
+                        "frequency": 1,
+                        "id": "16cd8750-30ab-4d9e-9843-484f8f017352",
+                        "name": "LFO 2",
+                        "scope": "global",
+                        "shape": "sine"
+                    },
+                    {
+                        "amount": 0,
+                        "delayTime": 0,
+                        "enabled": true,
+                        "frequency": 1,
+                        "id": "483c8efd-771a-4511-a70c-cd755b2f36e8",
+                        "name": "LFO 3",
+                        "scope": "global",
+                        "shape": "sine"
+                    }
+                ],
+                "globalPan": 0,
+                "globalTuning": 0,
+                "globalVolume": 0,
+                "keyboardColors": [
+                ],
+                "masterEffects": [
+                ],
+                "midiBindings": [
+                ],
+                "nodes": [
+                    {
+                        "bands": [
+                            {
+                                "freq": 100,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "LowShelf"
+                            },
+                            {
+                                "freq": 500,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 2000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 8000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "HighShelf"
+                            }
+                        ],
+                        "bypassed": false,
+                        "id": "{90b80f48-a801-48b0-9b79-238ee4c76983}",
+                        "muted": false,
+                        "name": "Equalizer",
+                        "soloed": false,
+                        "tags": "",
+                        "type": "Equalizer",
+                        "ui_x": 0,
+                        "ui_y": 0
+                    },
+                    {
+                        "bypassed": false,
+                        "centerFrequency": 0,
+                        "feedback": 0,
+                        "id": "{2d83de4e-8fec-46f4-a848-575584d65c43}",
+                        "mix": 0,
+                        "modDepth": 0,
+                        "modRate": 0,
+                        "muted": false,
+                        "name": "Phaser",
+                        "soloed": false,
+                        "tags": "",
+                        "type": "Phaser",
+                        "ui_x": 0,
+                        "ui_y": 0
+                    },
+                    {
+                        "bands": [
+                            {
+                                "freq": 100,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "LowShelf"
+                            },
+                            {
+                                "freq": 500,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 2000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 8000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "HighShelf"
+                            }
+                        ],
+                        "bypassed": false,
+                        "id": "{ab019512-8fd7-4b21-a24e-f22d647d0bea}",
+                        "muted": false,
+                        "name": "Equalizer",
+                        "soloed": false,
+                        "tags": "",
+                        "type": "Equalizer",
+                        "ui_x": 0,
+                        "ui_y": 0
+                    },
+                    {
+                        "ampEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "bypassed": false,
+                        "customTags": "",
+                        "filterCutoff": 1000,
+                        "filterEnabled": true,
+                        "filterEnvDepth": 0,
+                        "filterKeyTrack": 0,
+                        "filterResonance": 1,
+                        "filterType": "LowPass",
+                        "glideTime": 0.05,
+                        "hiCC64": 127,
+                        "id": "{d3e69b08-78fa-4d16-b916-569202d83217}",
+                        "insertEffects": [
+                            "{2b7f748d-81db-44bc-9e25-85d90ec0bcb8}"
+                        ],
+                        "isOscillator": false,
+                        "isSynthContainer": true,
+                        "legatoEnabled": false,
+                        "loCC64": 0,
+                        "modEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "muted": false,
+                        "name": "Group 3",
+                        "oscEnabled": true,
+                        "oscParams": {
+                            "damping": 0.5,
+                            "pluckType": "karplus_strong",
+                            "waveform": "saw",
+                            "wavetableFile": "",
+                            "wavetableFrameInterpolation": true,
+                            "wavetablePosition": 0
+                        },
+                        "pan": 0,
+                        "routings": [
+                        ],
+                        "seqMode": "normal",
+                        "silencedByTags": "",
+                        "silencingMode": "fast",
+                        "soloed": false,
+                        "synthParentId": "00000000-0000-0000-0000-000000000000",
+                        "tags": "",
+                        "trigger": "attack",
+                        "tuning": 0,
+                        "type": "SampleGroup",
+                        "ui_x": 0,
+                        "ui_y": 0,
+                        "volume": 0,
+                        "zones": [
+                        ]
+                    },
+                    {
+                        "bands": [
+                            {
+                                "freq": 100,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "LowShelf"
+                            },
+                            {
+                                "freq": 500,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 2000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "Peak"
+                            },
+                            {
+                                "freq": 8000,
+                                "gain": 0,
+                                "q": 1,
+                                "type": "HighShelf"
+                            }
+                        ],
+                        "bypassed": false,
+                        "id": "{2b7f748d-81db-44bc-9e25-85d90ec0bcb8}",
+                        "muted": false,
+                        "name": "Equalizer",
+                        "soloed": false,
+                        "tags": "",
+                        "type": "Equalizer",
+                        "ui_x": 0,
+                        "ui_y": 0
+                    },
+                    {
+                        "ampEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "bypassed": false,
+                        "customTags": "",
+                        "filterCutoff": 1000,
+                        "filterEnabled": true,
+                        "filterEnvDepth": 0,
+                        "filterKeyTrack": 0,
+                        "filterResonance": 1,
+                        "filterType": "LowPass",
+                        "glideTime": 0.05,
+                        "hiCC64": 127,
+                        "id": "{74f2ce47-1565-4973-8233-bbd0877efa41}",
+                        "insertEffects": [
+                        ],
+                        "isOscillator": true,
+                        "isSynthContainer": false,
+                        "legatoEnabled": false,
+                        "loCC64": 0,
+                        "modEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "muted": false,
+                        "name": "Oscillator 1",
+                        "oscEnabled": true,
+                        "oscParams": {
+                            "damping": 0.5,
+                            "pluckType": "karplus_strong",
+                            "waveform": "saw",
+                            "wavetableFile": "",
+                            "wavetableFrameInterpolation": true,
+                            "wavetablePosition": 0
+                        },
+                        "pan": 0,
+                        "routings": [
+                            {
+                                "amount": 1.1020408163265307,
+                                "bipolar": false,
+                                "destination": "Pan",
+                                "modBehavior": "add",
+                                "source": "LFO 1",
+                                "sourceId": "{00000000-0000-0000-0000-000000000000}",
+                                "translation": "linear",
+                                "translationTable": "",
+                                "translationValue": 1
+                            }
+                        ],
+                        "seqMode": "normal",
+                        "silencedByTags": "",
+                        "silencingMode": "fast",
+                        "soloed": false,
+                        "synthParentId": "d3e69b08-78fa-4d16-b916-569202d83217",
+                        "tags": "",
+                        "trigger": "attack",
+                        "tuning": 0,
+                        "type": "SampleGroup",
+                        "ui_x": 0,
+                        "ui_y": 0,
+                        "volume": 0,
+                        "zones": [
+                        ]
+                    },
+                    {
+                        "ampEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "bypassed": false,
+                        "customTags": "",
+                        "filterCutoff": 1000,
+                        "filterEnabled": true,
+                        "filterEnvDepth": 0,
+                        "filterKeyTrack": 0,
+                        "filterResonance": 1,
+                        "filterType": "LowPass",
+                        "glideTime": 0.05,
+                        "hiCC64": 127,
+                        "id": "{44b03914-9547-401f-9e6d-d526faa07bc0}",
+                        "insertEffects": [
+                        ],
+                        "isOscillator": true,
+                        "isSynthContainer": false,
+                        "legatoEnabled": false,
+                        "loCC64": 0,
+                        "modEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "muted": false,
+                        "name": "Oscillator 1",
+                        "oscEnabled": true,
+                        "oscParams": {
+                            "damping": 0.5,
+                            "pluckType": "karplus_strong",
+                            "waveform": "saw",
+                            "wavetableFile": "",
+                            "wavetableFrameInterpolation": true,
+                            "wavetablePosition": 0
+                        },
+                        "pan": 0,
+                        "routings": [
+                        ],
+                        "seqMode": "normal",
+                        "silencedByTags": "",
+                        "silencingMode": "fast",
+                        "soloed": false,
+                        "synthParentId": "62f3e251-43a8-48d8-976f-e0534e46e43d",
+                        "tags": "",
+                        "trigger": "attack",
+                        "tuning": 0,
+                        "type": "SampleGroup",
+                        "ui_x": 0,
+                        "ui_y": 0,
+                        "volume": 0,
+                        "zones": [
+                        ]
+                    },
+                    {
+                        "ampEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "bypassed": false,
+                        "customTags": "",
+                        "filterCutoff": 1000,
+                        "filterEnabled": true,
+                        "filterEnvDepth": 0,
+                        "filterKeyTrack": 0,
+                        "filterResonance": 1,
+                        "filterType": "LowPass",
+                        "glideTime": 0.05,
+                        "hiCC64": 127,
+                        "id": "{2309ab47-a665-4418-90fd-9de9b7658377}",
+                        "insertEffects": [
+                            "{ab019512-8fd7-4b21-a24e-f22d647d0bea}",
+                            "{2d83de4e-8fec-46f4-a848-575584d65c43}",
+                            "{90b80f48-a801-48b0-9b79-238ee4c76983}"
+                        ],
+                        "isOscillator": false,
+                        "isSynthContainer": false,
+                        "legatoEnabled": false,
+                        "loCC64": 0,
+                        "modEnv": {
+                            "attack": 0,
+                            "decay": 0,
+                            "release": 0.1,
+                            "sustain": 1
+                        },
+                        "muted": false,
+                        "name": "Group 1",
+                        "oscEnabled": true,
+                        "oscParams": {
+                            "damping": 0.5,
+                            "pluckType": "karplus_strong",
+                            "waveform": "saw",
+                            "wavetableFile": "",
+                            "wavetableFrameInterpolation": true,
+                            "wavetablePosition": 0
+                        },
+                        "pan": 0,
+                        "routings": [
+                        ],
+                        "seqMode": "normal",
+                        "silencedByTags": "",
+                        "silencingMode": "fast",
+                        "soloed": false,
+                        "synthParentId": "00000000-0000-0000-0000-000000000000",
+                        "tags": "",
+                        "trigger": "attack",
+                        "tuning": 0,
+                        "type": "SampleGroup",
+                        "ui_x": 0,
+                        "ui_y": 0,
+                        "volume": 0,
+                        "zones": [
+                        ]
+                    }
+                ],
+                "noteSequences": [
+                    {
+                        "id": "{5674e26c-8429-4bf1-a475-b1609353ce79}",
+                        "length": 4,
+                        "name": "Seq 1",
+                        "rate": 1,
+                        "steps": [
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 0,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 1,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 2,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 2.9759998321533203,
+                                "note": 85,
+                                "position": 3,
+                                "velocity": 0.7853333353996277
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 4,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 5,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 6,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 7,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 8,
+                                "velocity": 1
+                            },
+                            {
+                                "length": 1,
+                                "note": 60,
+                                "position": 9,
+                                "velocity": 1
+                            }
+                        ],
+                        "tsDen": 4,
+                        "tsNum": 4
+                    }
+                ],
+                "tagPolyphony": {
+                },
+                "uiBgImage": "",
+                "uiBgMode": 0,
+                "uiComponents": [
+                ],
+                "uiHeight": 375,
+                "uiWidth": 812,
+                "viewportX": 0,
+                "viewportY": 0,
+                "viewportZoom": 1
+            }
+        }
+    ],
+    "projectName": "teste",
+    "version": "2.0.0"
+}

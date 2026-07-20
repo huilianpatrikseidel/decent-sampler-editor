@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+    <colors>
+        <color name="BgColor" rgba="#1e1e2eff"/>
+        <color name="HeaderColor" rgba="#11111bff"/>
+        <color name="TextColor" rgba="#cdd6f4ff"/>
+        <color name="AccentColor" rgba="#89b4faff"/>
+    </colors>
+    <fonts>
+        <font font-name="Arial" name="SystemFont" size="14"/>
+    </fonts>
+    <template background-color="BgColor" class="CViewContainer" name="view" size="800, 400">
+        <!-- Header -->
+        <view class="CViewContainer" origin="0, 0" size="800, 40" background-color="HeaderColor" />
+        <view class="CTextLabel" title="EQUALIZER (PRO-Q STYLE)" origin="20, 0" size="280, 40" font="SystemFont" font-color="AccentColor" transparent="true" text-alignment="left"/>
+        
+        <!-- Spectrum Curve View -->
+        <!-- <view class="CControl" custom-view-name="SpectrumCurveView" origin="20, 50" size="760, 330" /> -->
+    </template>
+</vstgui-ui-description>

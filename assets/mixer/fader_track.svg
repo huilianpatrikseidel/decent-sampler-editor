@@ -1,0 +1,25 @@
+<svg width="30" height="200" viewBox="0 0 30 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="inset-shadow">
+      <feOffset dx="0" dy="2"/>
+      <feGaussianBlur stdDeviation="1.5" result="offset-blur"/>
+      <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse"/>
+      <feFlood flood-color="black" flood-opacity="0.9" result="color"/>
+      <feComposite operator="in" in="color" in2="inverse" result="shadow"/>
+      <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect x="0" y="0" width="30" height="200" fill="#181818"/>
+  
+  <!-- Scale marks (Tick marks) -->
+  <line x1="2" y1="10" x2="6" y2="10" stroke="#555" stroke-width="1"/>
+  <line x1="2" y1="55" x2="6" y2="55" stroke="#555" stroke-width="1"/>
+  <!-- 0dB Mark -->
+  <line x1="2" y1="100" x2="8" y2="100" stroke="#fff" stroke-width="2"/>
+  <line x1="2" y1="145" x2="6" y2="145" stroke="#555" stroke-width="1"/>
+  <line x1="2" y1="190" x2="6" y2="190" stroke="#555" stroke-width="1"/>
+  
+  <!-- Track Groove -->
+  <rect x="11" y="8" width="8" height="184" rx="4" fill="#000" filter="url(#inset-shadow)"/>
+</svg>

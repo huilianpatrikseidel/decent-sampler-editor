@@ -1,0 +1,26 @@
+END-USER LICENSE AGREEMENT (EULA) for Decent Sampler Editor
+
+IMPORTANT-READ CAREFULLY: This End-User License Agreement ("EULA") is a legal agreement between you (either an individual or a single entity) and the author of this software for the software product identified above, which includes computer software and may include associated media, printed materials, and "online" or electronic documentation ("SOFTWARE PRODUCT"). 
+
+By installing, copying, or otherwise using the SOFTWARE PRODUCT, you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not install or use the SOFTWARE PRODUCT.
+
+1. GRANT OF LICENSE. 
+The author grants you a personal, non-exclusive license to use the SOFTWARE PRODUCT for your own use. You may not distribute, sell, or rent the SOFTWARE PRODUCT to third parties.
+
+2. COPYRIGHT. 
+All title and copyrights in and to the SOFTWARE PRODUCT (including but not limited to any images, photographs, animations, video, audio, music, text, and "applets" incorporated into the SOFTWARE PRODUCT), the accompanying printed materials, and any copies of the SOFTWARE PRODUCT are owned by the author.
+
+3. NO WARRANTIES. 
+The author expressly disclaims any warranty for the SOFTWARE PRODUCT. The SOFTWARE PRODUCT and any related documentation is provided "as is" without warranty of any kind, either express or implied, including, without limitation, the implied warranties or merchantability, fitness for a particular purpose, or noninfringement.
+
+4. THIRD-PARTY COMPONENTS.
+This SOFTWARE PRODUCT utilizes several third-party libraries which are covered by their own licenses, including:
+
+- miniz (MIT License) - Copyright 2013-2014 RAD Game Tools and Valve Software, Copyright 2010-2014 Rich Geldreich
+- RtMidi (MIT-like License) - Copyright (c) 2003-2023 Gary P. Scavone
+- miniaudio (MIT License) - Copyright (c) David Reid
+- FFTConvolver (MIT License) - Copyright (c) 2017 HiFi-LoFi
+- VST3 SDK (Steinberg VST3 License) - Copyright (c) 2024, Steinberg Media Technologies GmbH
+- Qt6 (LGPL v3 / Commercial License) - Copyright (C) The Qt Company Ltd.
+
+For the full texts of the third-party licenses, please refer to the respective documentation in the source code.

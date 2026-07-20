@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+    <colors>
+        <color name="BgColor" rgba="#1e1e2eff"/>
+        <color name="HeaderColor" rgba="#11111bff"/>
+        <color name="TextColor" rgba="#cdd6f4ff"/>
+        <color name="AccentColor" rgba="#89b4faff"/>
+        <color name="SliderBackColor" rgba="#313244ff"/>
+    </colors>
+    <template background-color="~ BgColor" class="CViewContainer" name="view" size="320, 310">
+        <!-- Header -->
+        <view class="CViewContainer" origin="0, 0" size="320, 50" background-color="~ HeaderColor" />
+        <view class="CTextLabel" title="COMPRESSOR" origin="20, 0" size="280, 50" font="~ SystemFont" font-color="~ AccentColor" font-antialias="true" font-weight="bold" transparent="true" text-alignment="left"/>
+        
+        <!-- Controls -->
+        <view class="CTextLabel" title="THRESHOLD" origin="20, 50" size="90, 20" font="~ SystemFont" font-color="~ TextColor" font-antialias="true" style-3D-in="false" style-3D-out="false" transparent="true" text-alignment="left"/>
+        <view class="CSlider" control-tag="Threshold" draw-back="true" draw-back-color="~ SliderBackColor" draw-value="true" draw-value-color="~ AccentColor" draw-value-from-center="false" handle-bitmap="" origin="120, 55" size="140, 10" transparent="false" />
+        <view class="CTextEdit" control-tag="Threshold" origin="270, 50" size="30, 20" font="~ SystemFont" font-color="~ TextColor" back-color="~ BgColor" frame-color="~ BgColor" font-antialias="true" transparent="false" text-alignment="center"/>
+        <view class="CTextLabel" title="RATIO" origin="20, 110" size="90, 20" font="~ SystemFont" font-color="~ TextColor" font-antialias="true" style-3D-in="false" style-3D-out="false" transparent="true" text-alignment="left"/>
+        <view class="CSlider" control-tag="Ratio" draw-back="true" draw-back-color="~ SliderBackColor" draw-value="true" draw-value-color="~ AccentColor" draw-value-from-center="false" handle-bitmap="" origin="120, 115" size="140, 10" transparent="false" />
+        <view class="CTextEdit" control-tag="Ratio" origin="270, 110" size="30, 20" font="~ SystemFont" font-color="~ TextColor" back-color="~ BgColor" frame-color="~ BgColor" font-antialias="true" transparent="false" text-alignment="center"/>
+        <view class="CTextLabel" title="ATTACK" origin="20, 170" size="90, 20" font="~ SystemFont" font-color="~ TextColor" font-antialias="true" style-3D-in="false" style-3D-out="false" transparent="true" text-alignment="left"/>
+        <view class="CSlider" control-tag="Attack" draw-back="true" draw-back-color="~ SliderBackColor" draw-value="true" draw-value-color="~ AccentColor" draw-value-from-center="false" handle-bitmap="" origin="120, 175" size="140, 10" transparent="false" />
+        <view class="CTextEdit" control-tag="Attack" origin="270, 170" size="30, 20" font="~ SystemFont" font-color="~ TextColor" back-color="~ BgColor" frame-color="~ BgColor" font-antialias="true" transparent="false" text-alignment="center"/>
+        <view class="CTextLabel" title="RELEASE" origin="20, 230" size="90, 20" font="~ SystemFont" font-color="~ TextColor" font-antialias="true" style-3D-in="false" style-3D-out="false" transparent="true" text-alignment="left"/>
+        <view class="CSlider" control-tag="Release" draw-back="true" draw-back-color="~ SliderBackColor" draw-value="true" draw-value-color="~ AccentColor" draw-value-from-center="false" handle-bitmap="" origin="120, 235" size="140, 10" transparent="false" />
+        <view class="CTextEdit" control-tag="Release" origin="270, 230" size="30, 20" font="~ SystemFont" font-color="~ TextColor" back-color="~ BgColor" frame-color="~ BgColor" font-antialias="true" transparent="false" text-alignment="center"/>
+
+    </template>
+    <control-tags>
+        <control-tag name="Threshold" tag="0"/>
+        <control-tag name="Ratio" tag="1"/>
+        <control-tag name="Attack" tag="2"/>
+        <control-tag name="Release" tag="3"/>
+    </control-tags>
+</vstgui-ui-description>

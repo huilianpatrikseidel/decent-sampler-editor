@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+    <colors>
+        <color name="BgColor" rgba="#1e1e2eff"/>
+        <color name="HeaderColor" rgba="#11111bff"/>
+        <color name="TextColor" rgba="#cdd6f4ff"/>
+        <color name="AccentColor" rgba="#89b4faff"/>
+        <color name="SliderBackColor" rgba="#313244ff"/>
+    </colors>
+    <template background-color="~ BgColor" class="CViewContainer" name="view" size="320, 130">
+        <view class="CViewContainer" origin="0, 0" size="320, 50" background-color="~ HeaderColor" />
+        <view class="CTextLabel" title="GAIN" origin="20, 0" size="280, 50" font="~ SystemFont" font-color="~ AccentColor" font-antialias="true" font-weight="bold" transparent="true" text-alignment="left"/>
+        <view class="CTextLabel" title="GAIN" origin="20, 50" size="90, 20" font="~ SystemFont" font-color="~ TextColor" font-antialias="true" style-3D-in="false" style-3D-out="false" transparent="true" text-alignment="left"/>
+        <view class="CSlider" control-tag="Gain" draw-back="true" draw-back-color="~ SliderBackColor" draw-value="true" draw-value-color="~ AccentColor" draw-value-from-center="false" handle-bitmap="" origin="120, 55" size="140, 10" transparent="false" />
+        <view class="CTextEdit" control-tag="Gain" origin="270, 50" size="30, 20" font="~ SystemFont" font-color="~ TextColor" back-color="~ BgColor" frame-color="~ BgColor" font-antialias="true" transparent="false" text-alignment="center"/>
+
+    </template>
+    <control-tags>
+        <control-tag name="Gain" tag="0"/>
+    </control-tags>
+</vstgui-ui-description>

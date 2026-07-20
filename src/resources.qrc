@@ -1,0 +1,87 @@
+<RCC>
+    <qresource prefix="/">
+        <file>ui/splashscreen.svg</file>
+        <file>ui/arrow-up.svg</file>
+        <file>ui/arrow-down.svg</file>
+        <file>ui/about.svg</file>
+        <file>ui/Jost-Regular.ttf</file>
+        <file>ui/style.qss</file>
+        <file>ui/style_light.qss</file>
+        <file>ui/style_template.qss</file>
+        <file>themes/dark.json</file>
+        <file>themes/light.json</file>
+    </qresource>
+    <qresource prefix="/mixer">
+        <file alias="btn_mute_off.svg">../assets/mixer/btn_mute_off.svg</file>
+        <file alias="btn_mute_on.svg">../assets/mixer/btn_mute_on.svg</file>
+        <file alias="btn_solo_off.svg">../assets/mixer/btn_solo_off.svg</file>
+        <file alias="btn_solo_on.svg">../assets/mixer/btn_solo_on.svg</file>
+        <file alias="fader_cap.svg">../assets/mixer/fader_cap.svg</file>
+        <file alias="fader_cap_master.svg">../assets/mixer/fader_cap_master.svg</file>
+        <file alias="fader_track.svg">../assets/mixer/fader_track.svg</file>
+        <file alias="knob_base.svg">../assets/mixer/knob_base.svg</file>
+        <file alias="knob_indicator.svg">../assets/mixer/knob_indicator.svg</file>
+    </qresource>
+    <qresource prefix="/fx">
+        <file alias="chorus_bg.svg">../assets/fx/chorus_bg.svg</file>
+        <file alias="chorus_knob_base.svg">../assets/fx/chorus_knob_base.svg</file>
+        <file alias="chorus_knob_cap.svg">../assets/fx/chorus_knob_cap.svg</file>
+        <file alias="chorus_switch_off.svg">../assets/fx/chorus_switch_off.svg</file>
+        <file alias="chorus_switch_on.svg">../assets/fx/chorus_switch_on.svg</file>
+        <file alias="compressor_bg.svg">../assets/fx/compressor_bg.svg</file>
+        <file alias="compressor_knob_base.svg">../assets/fx/compressor_knob_base.svg</file>
+        <file alias="compressor_knob_cap.svg">../assets/fx/compressor_knob_cap.svg</file>
+        <file alias="compressor_switch_off.svg">../assets/fx/compressor_switch_off.svg</file>
+        <file alias="compressor_switch_on.svg">../assets/fx/compressor_switch_on.svg</file>
+        <file alias="delay_bg.svg">../assets/fx/delay_bg.svg</file>
+        <file alias="delay_knob_base.svg">../assets/fx/delay_knob_base.svg</file>
+        <file alias="delay_knob_cap.svg">../assets/fx/delay_knob_cap.svg</file>
+        <file alias="delay_switch_off.svg">../assets/fx/delay_switch_off.svg</file>
+        <file alias="delay_switch_on.svg">../assets/fx/delay_switch_on.svg</file>
+        <file alias="filter_bg.svg">../assets/fx/filter_bg.svg</file>
+        <file alias="filter_knob_base.svg">../assets/fx/filter_knob_base.svg</file>
+        <file alias="filter_knob_cap.svg">../assets/fx/filter_knob_cap.svg</file>
+        <file alias="filter_switch_off.svg">../assets/fx/filter_switch_off.svg</file>
+        <file alias="filter_switch_on.svg">../assets/fx/filter_switch_on.svg</file>
+        <file alias="reverb_bg.svg">../assets/fx/reverb_bg.svg</file>
+        <file alias="reverb_knob_base.svg">../assets/fx/reverb_knob_base.svg</file>
+        <file alias="reverb_knob_cap.svg">../assets/fx/reverb_knob_cap.svg</file>
+        <file alias="reverb_switch_off.svg">../assets/fx/reverb_switch_off.svg</file>
+        <file alias="reverb_switch_on.svg">../assets/fx/reverb_switch_on.svg</file>
+        <file alias="gain_bg.svg">../assets/fx/gain_bg.svg</file>
+        <file alias="gain_knob_base.svg">../assets/fx/gain_knob_base.svg</file>
+        <file alias="gain_knob_cap.svg">../assets/fx/gain_knob_cap.svg</file>
+        <file alias="gain_switch_off.svg">../assets/fx/gain_switch_off.svg</file>
+        <file alias="gain_switch_on.svg">../assets/fx/gain_switch_on.svg</file>
+        <file alias="phaser_bg.svg">../assets/fx/phaser_bg.svg</file>
+        <file alias="phaser_knob_base.svg">../assets/fx/phaser_knob_base.svg</file>
+        <file alias="phaser_knob_cap.svg">../assets/fx/phaser_knob_cap.svg</file>
+        <file alias="phaser_switch_off.svg">../assets/fx/phaser_switch_off.svg</file>
+        <file alias="phaser_switch_on.svg">../assets/fx/phaser_switch_on.svg</file>
+        <file alias="pitchshifter_bg.svg">../assets/fx/pitchshifter_bg.svg</file>
+        <file alias="pitchshifter_knob_base.svg">../assets/fx/pitchshifter_knob_base.svg</file>
+        <file alias="pitchshifter_knob_cap.svg">../assets/fx/pitchshifter_knob_cap.svg</file>
+        <file alias="pitchshifter_switch_off.svg">../assets/fx/pitchshifter_switch_off.svg</file>
+        <file alias="pitchshifter_switch_on.svg">../assets/fx/pitchshifter_switch_on.svg</file>
+        <file alias="wavefolder_bg.svg">../assets/fx/wavefolder_bg.svg</file>
+        <file alias="wavefolder_knob_base.svg">../assets/fx/wavefolder_knob_base.svg</file>
+        <file alias="wavefolder_knob_cap.svg">../assets/fx/wavefolder_knob_cap.svg</file>
+        <file alias="wavefolder_switch_off.svg">../assets/fx/wavefolder_switch_off.svg</file>
+        <file alias="wavefolder_switch_on.svg">../assets/fx/wavefolder_switch_on.svg</file>
+        <file alias="waveshaper_bg.svg">../assets/fx/waveshaper_bg.svg</file>
+        <file alias="waveshaper_knob_base.svg">../assets/fx/waveshaper_knob_base.svg</file>
+        <file alias="waveshaper_knob_cap.svg">../assets/fx/waveshaper_knob_cap.svg</file>
+        <file alias="waveshaper_switch_off.svg">../assets/fx/waveshaper_switch_off.svg</file>
+        <file alias="waveshaper_switch_on.svg">../assets/fx/waveshaper_switch_on.svg</file>
+        <file alias="stereosimulator_bg.svg">../assets/fx/stereosimulator_bg.svg</file>
+        <file alias="stereosimulator_knob_base.svg">../assets/fx/stereosimulator_knob_base.svg</file>
+        <file alias="stereosimulator_knob_cap.svg">../assets/fx/stereosimulator_knob_cap.svg</file>
+        <file alias="stereosimulator_switch_off.svg">../assets/fx/stereosimulator_switch_off.svg</file>
+        <file alias="stereosimulator_switch_on.svg">../assets/fx/stereosimulator_switch_on.svg</file>
+        <file alias="bitcrusher_bg.svg">../assets/fx/bitcrusher_bg.svg</file>
+        <file alias="bitcrusher_knob_base.svg">../assets/fx/bitcrusher_knob_base.svg</file>
+        <file alias="bitcrusher_knob_cap.svg">../assets/fx/bitcrusher_knob_cap.svg</file>
+        <file alias="bitcrusher_switch_off.svg">../assets/fx/bitcrusher_switch_off.svg</file>
+        <file alias="bitcrusher_switch_on.svg">../assets/fx/bitcrusher_switch_on.svg</file>
+    </qresource>
+</RCC>
