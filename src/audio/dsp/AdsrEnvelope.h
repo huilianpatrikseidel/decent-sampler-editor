@@ -7,6 +7,7 @@ public:
     AdsrEnvelope();
 
     void trigger(float attackTime, float decayTime, float sustainLevel, float releaseTime, float sampleRate = 44100.0f);
+    void setParameters(float attackTime, float decayTime, float sustainLevel, float releaseTime, float sampleRate = 44100.0f);
     void release();
     void reset();
 

@@ -110,7 +110,12 @@ void ApplicationController::playNote(int midiNote, int velocity) {
                 msg.type = AudioCommandType::PlayNote;
                 msg.note = midiNote;
                 msg.velocity = velocity;
-                msg.sampleId = z.sampleId;
+                #ifdef _MSC_VER
+                strncpy_s(msg.sampleId, sizeof(msg.sampleId), z.sampleId.c_str(), _TRUNCATE);
+                #else
+                strncpy(msg.sampleId, z.sampleId.c_str(), sizeof(msg.sampleId) - 1);
+                msg.sampleId[sizeof(msg.sampleId) - 1] = '\0';
+                #endif
                 msg.attack = z.attack;
                 msg.decay = z.decay;
                 msg.sustain = z.sustain;

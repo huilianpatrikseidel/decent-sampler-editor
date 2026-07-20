@@ -82,10 +82,10 @@
     "code_tag": "#569CD6",
     "code_comment": "#6A9955",
     "code_header": "#C586C0",
-    "card_bg": "#2A2A2C",
-    "card_inner_bg": "#141414",
-    "card_controls_bg": "#1C1C1E",
-    "card_border": "1px solid #3A3A3C",
-    "card_inner_border": "1px solid #0F0F12",
+    "card_bg": "#303035",
+    "card_inner_bg": "#202024",
+    "card_controls_bg": "#121212",
+    "card_border": "1px solid #404044",
+    "card_inner_border": "1px solid #404044",
     "knob_value_arc": "#ff6600"
 }

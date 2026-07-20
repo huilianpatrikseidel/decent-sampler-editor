@@ -92,7 +92,7 @@ void SynthKnobWidget::paintEvent(QPaintEvent* event) {
     painter.drawEllipse(centerX - (arcSize / 2 - 2), centerY - (arcSize / 2 - 2), (arcSize / 2 - 2) * 2, (arcSize / 2 - 2) * 2);
     
     QPen trackPen;
-    trackPen.setWidth(2);
+    trackPen.setWidth(4);
     trackPen.setCapStyle(Qt::RoundCap);
     
     QColor trackColor = ThemePalette::color("knob_track");
@@ -112,7 +112,7 @@ void SynthKnobWidget::paintEvent(QPaintEvent* event) {
         QColor modColor = ThemePalette::color("knob_mod");
         QPen modPen;
         modPen.setColor(modColor);
-        modPen.setWidth(2);
+        modPen.setWidth(4);
         modPen.setCapStyle(Qt::RoundCap);
         
         double minCombinedNorm = normalizedValue;

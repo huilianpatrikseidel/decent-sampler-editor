@@ -106,6 +106,13 @@ bool AudioEngine::initialize(const QString& deviceId, int sampleRate, int buffer
 
     if (contextInitialized) ma_context_uninit(&context);
 
+    // Pre-allocate DSP buffers for audio callback
+    size_t maxFrames = (bufferSize > 0) ? std::max(bufferSize, 8192) : 8192;
+    m_dryL.resize(maxFrames);
+    m_dryR.resize(maxFrames);
+    m_vstOutL.resize(maxFrames);
+    m_vstOutR.resize(maxFrames);
+
     m_isInitialized = true;
     return true;
 }
@@ -197,7 +204,7 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
                         if (msg.isOscillator) {
                             // Oscillator voice: no sample to load
                             m_voices[i].trigger(msg, msg.note);
-                        } else if (m_voices[i].init(&m_resourceManager, msg.sampleId.c_str())) {
+                        } else if (m_voices[i].init(&m_resourceManager, msg.sampleId)) {
                             m_voices[i].trigger(msg);
                         }
                         break;
@@ -217,6 +224,12 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
             targetLfo->setShape(static_cast<LfoShape>(msg.lfoShape));
             targetLfo->setFrequency(msg.lfoFreq);
             targetLfo->setAmount(msg.lfoAmount);
+        } else if (msg.type == AudioCommandType::SetParameter || msg.type == AudioCommandType::RebuildGraph) {
+            for (int i = 0; i < MAX_VOICES; ++i) {
+                if (m_voices[i].isActive()) {
+                    m_voices[i].updateParameters(msg);
+                }
+            }
         }
     }
 
@@ -226,8 +239,16 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
         outputBuffer[i] = 0.0f;
     }
 
-    std::vector<float> dryL(frameCount, 0.0f);
-    std::vector<float> dryR(frameCount, 0.0f);
+    if (frameCount > m_dryL.size()) {
+        // Fallback in case host requests surprisingly huge buffer
+        m_dryL.resize(frameCount);
+        m_dryR.resize(frameCount);
+        m_vstOutL.resize(frameCount);
+        m_vstOutR.resize(frameCount);
+    }
+
+    std::fill(m_dryL.begin(), m_dryL.begin() + frameCount, 0.0f);
+    std::fill(m_dryR.begin(), m_dryR.begin() + frameCount, 0.0f);
 
     for (int frame = 0; frame < frameCount; ++frame) {
         float mixL = 0.0f;
@@ -245,14 +266,14 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
             }
         }
         
-        dryL[frame] = mixL * masterVol;
-        dryR[frame] = mixR * masterVol;
+        m_dryL[frame] = mixL * masterVol;
+        m_dryR[frame] = mixR * masterVol;
     }
     
     // Hard clipping before writing to output
     for (int frame = 0; frame < frameCount; ++frame) {
-        float outL = dryL[frame];
-        float outR = dryR[frame];
+        float outL = m_dryL[frame];
+        float outR = m_dryR[frame];
         if (outL > 1.0f) outL = 1.0f;
         if (outL < -1.0f) outL = -1.0f;
         if (outR > 1.0f) outR = 1.0f;
@@ -265,11 +286,8 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
     // Now apply VST3 host processing over the final interleaved output buffer
     std::vector<Vst3Host*>* activeFx = m_activeVstEffects.load(std::memory_order_acquire);
     if (activeFx && !activeFx->empty()) {
-        std::vector<float> vstOutL(frameCount);
-        std::vector<float> vstOutR(frameCount);
-        
-        float* inputs[2] = { dryL.data(), dryR.data() };
-        float* outputs[2] = { vstOutL.data(), vstOutR.data() };
+        float* inputs[2] = { m_dryL.data(), m_dryR.data() };
+        float* outputs[2] = { m_vstOutL.data(), m_vstOutR.data() };
         
         for (Vst3Host* host : *activeFx) {
             if (host) {

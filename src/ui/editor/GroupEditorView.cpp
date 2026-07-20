@@ -200,7 +200,17 @@ void GroupEditorView::rebuildForm() {
     QWidget* filterWidgetContainer = new QWidget();
     QVBoxLayout* filterLayout = new QVBoxLayout(filterWidgetContainer);
     filterLayout->setContentsMargins(0, 0, 10, 0);
-    filterLayout->addWidget(new QLabel("<b>Filter</b>"));
+    
+    QHBoxLayout* filterHeaderLayout = new QHBoxLayout();
+    QPushButton* filterToggle = new QPushButton();
+    filterToggle->setObjectName("CardEnableToggle");
+    filterToggle->setCheckable(true);
+    filterToggle->setFixedSize(12, 12);
+    filterToggle->setChecked(sg->filterEnabled);
+    filterHeaderLayout->addWidget(filterToggle);
+    filterHeaderLayout->addWidget(new QLabel("<b>Filter</b>"));
+    filterHeaderLayout->addStretch();
+    filterLayout->addLayout(filterHeaderLayout);
 
     FilterSectionWidget* filterWidget = new FilterSectionWidget();
     filterWidget->setFilterType(sg->filterType);
@@ -208,7 +218,8 @@ void GroupEditorView::rebuildForm() {
     filterWidget->setResonance(sg->filterResonance);
     filterWidget->setEnvDepth(sg->filterEnvDepth);
     filterWidget->setKeyTrack(sg->filterKeyTrack);
-    filterWidget->setEnabled(!isSynth);
+    filterWidget->setEnabled(!isSynth && sg->filterEnabled);
+    filterToggle->setEnabled(!isSynth);
 
     connect(filterWidget, &FilterSectionWidget::filterChanged, this, [this, sg, pm](const QString& type, double cutoff, double resonance, double envDepth, double keyTrack) {
         if (m_isUpdatingUI) return;
@@ -225,6 +236,16 @@ void GroupEditorView::rebuildForm() {
 
         pm->getUndoStack()->push(new ModifyPropertyCommand(pm, m_currentSgId, "", oldJson, newSg.toJson()));
     });
+    
+    connect(filterToggle, &QPushButton::toggled, this, [this, sg, pm, filterWidget](bool checked) {
+        if (m_isUpdatingUI) return;
+        QJsonObject oldJson = sg->toJson();
+        SampleGroup newSg = *sg;
+        newSg.filterEnabled = checked;
+        pm->getUndoStack()->push(new ModifyPropertyCommand(pm, m_currentSgId, "filterEnabled", oldJson, newSg.toJson()));
+        filterWidget->setEnabled(checked);
+    });
+    
     filterLayout->addWidget(filterWidget);
 
     auto createEnvTab = [&](const ADSR& env, const QString& propName) {

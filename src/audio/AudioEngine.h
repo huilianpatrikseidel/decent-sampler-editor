@@ -77,4 +77,9 @@ private:
 
     QString m_currentDeviceName;
     int m_currentSampleRate = 44100;
+    
+    std::vector<float> m_dryL;
+    std::vector<float> m_dryR;
+    std::vector<float> m_vstOutL;
+    std::vector<float> m_vstOutR;
 };

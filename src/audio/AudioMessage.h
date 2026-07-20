@@ -17,6 +17,7 @@ enum class AudioCommandType {
     SetMasterVolume,
     SetLFO,
     RebuildGraph,
+    SetParameter,
     Shutdown
 };
 
@@ -30,7 +31,7 @@ struct AudioMessage {
     
     // Sample Playback
     int velocity = 100;
-    std::string sampleId;
+    char sampleId[256] = {0};
     
     // Envelope Data
     float attack = 0.0f;

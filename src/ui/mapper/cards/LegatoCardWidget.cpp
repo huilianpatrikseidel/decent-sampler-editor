@@ -41,7 +41,7 @@ LegatoCardWidget::LegatoCardWidget(ProjectManager* pm, SampleGroup* sg, const QU
     QVBoxLayout* btnLayout = new QVBoxLayout();
     btnLayout->setSpacing(4);
     QLabel* legatoLabel = new QLabel("Mode");
-    legatoLabel->setStyleSheet("font-size: 12px;  font-weight: 600; background: transparent;");
+    QFont lf = legatoLabel->font(); lf.setPointSize(10); lf.setBold(true); legatoLabel->setFont(lf);
     btnLayout->addWidget(legatoLabel, 0, Qt::AlignCenter);
     
     m_legatoBtn = new QPushButton(sg->legatoEnabled ? "LEGATO" : "MONO");
@@ -72,7 +72,7 @@ LegatoCardWidget::LegatoCardWidget(ProjectManager* pm, SampleGroup* sg, const QU
     QVBoxLayout* glideLayout = new QVBoxLayout();
     glideLayout->setSpacing(2);
     QLabel* glideLabel = new QLabel("Glide");
-    glideLabel->setStyleSheet("font-size: 12px;  font-weight: 600; background: transparent;");
+    QFont gf = glideLabel->font(); gf.setPointSize(10); gf.setBold(true); glideLabel->setFont(gf);
     glideLayout->addWidget(glideLabel, 0, Qt::AlignCenter);
     
     m_glideKnob = new SynthKnobWidget();
@@ -88,7 +88,7 @@ LegatoCardWidget::LegatoCardWidget(ProjectManager* pm, SampleGroup* sg, const QU
     glideLayout->addWidget(m_glideKnob, 0, Qt::AlignCenter);
     
     QLabel* glideVal = new QLabel(QString::number(sg->glideTime, 'f', 2) + "s");
-    glideVal->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace; background: transparent;");
+    QFont gvf = glideVal->font(); gvf.setPointSize(8); gvf.setFamily("Consolas"); glideVal->setFont(gvf);
     glideVal->setAlignment(Qt::AlignCenter);
     glideLayout->addWidget(glideVal, 0, Qt::AlignCenter);
     

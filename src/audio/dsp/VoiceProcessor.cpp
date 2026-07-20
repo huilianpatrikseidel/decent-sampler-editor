@@ -24,7 +24,7 @@ bool VoiceProcessor::init(ma_resource_manager* rm, const char* filepath) {
     ma_result res = ma_resource_manager_data_source_init(
         rm, 
         filepath, 
-        MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_STREAM, 
+        MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_STREAM | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC, 
         NULL, 
         &m_dataSource
     );
@@ -298,5 +298,35 @@ void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& o
         
         outL = m_svfL.process(outL);
         outR = m_svfR.process(outR);
+    }
+}
+
+void VoiceProcessor::updateParameters(const AudioMessage& msg) {
+    // Update ADSR
+    m_adsr.setParameters(msg.attack, msg.decay, msg.sustain, msg.release, 44100.0f);
+    m_modAdsr.setParameters(msg.modAttack, msg.modDecay, msg.modSustain, msg.modRelease, 44100.0f);
+    
+    // Update Routing
+    m_numRoutings = msg.numRoutings;
+    for (int i = 0; i < msg.numRoutings; ++i) {
+        m_routings[i] = msg.routings[i];
+    }
+    
+    // Update Filter
+    m_hasFilter = msg.hasFilter;
+    m_filterCutoff = msg.filterCutoff;
+    m_filterResonance = msg.filterResonance;
+    
+    if (m_hasFilter) {
+        StateVariableFilter::Type svfType = StateVariableFilter::Type::LowPass;
+        switch (msg.filterType) {
+            case 0: svfType = StateVariableFilter::Type::LowPass; break;
+            case 1: svfType = StateVariableFilter::Type::HighPass; break;
+            case 2: svfType = StateVariableFilter::Type::BandPass; break;
+            case 3: svfType = StateVariableFilter::Type::Notch; break;
+        }
+        m_svfL.setType(svfType); m_svfR.setType(svfType);
+        m_svfL.setCutoff(m_filterCutoff); m_svfR.setCutoff(m_filterCutoff);
+        m_svfL.setResonance(m_filterResonance); m_svfR.setResonance(m_filterResonance);
     }
 }

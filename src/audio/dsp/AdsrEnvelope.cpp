@@ -12,6 +12,13 @@ void AdsrEnvelope::trigger(float attackTime, float decayTime, float sustainLevel
     m_releaseRate = (releaseTime > 0.0f) ? (1.0f / (releaseTime * sampleRate)) : 1.0f;
 }
 
+void AdsrEnvelope::setParameters(float attackTime, float decayTime, float sustainLevel, float releaseTime, float sampleRate) {
+    m_sustainLevel = sustainLevel;
+    m_attackRate = (attackTime > 0.0f) ? (1.0f / (attackTime * sampleRate)) : 1.0f;
+    m_decayRate = (decayTime > 0.0f) ? ((1.0f - sustainLevel) / (decayTime * sampleRate)) : 1.0f;
+    m_releaseRate = (releaseTime > 0.0f) ? (1.0f / (releaseTime * sampleRate)) : 1.0f;
+}
+
 void AdsrEnvelope::release() {
     if (m_state != Off) {
         m_state = Release;

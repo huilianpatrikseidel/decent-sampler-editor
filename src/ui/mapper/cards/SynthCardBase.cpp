@@ -37,13 +37,19 @@ SynthCardBase::SynthCardBase(const QString& titleText, std::function<void()> onD
     m_titleLabel->setAlignment(Qt::AlignCenter);
     headerLayout->addWidget(m_titleLabel, 1);
     
+    QWidget* rightContainer = new QWidget();
+    rightContainer->setFixedSize(24, 24);
+    QHBoxLayout* rightLayout = new QHBoxLayout(rightContainer);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    
     if (onDelete) {
         QPushButton* btnDel = new QPushButton("X");
         btnDel->setStyleSheet("background-color: transparent;  font-weight: bold; font-size: 16px; border: none;");
         btnDel->setFixedSize(24, 24);
         connect(btnDel, &QPushButton::clicked, this, onDelete);
-        headerLayout->addWidget(btnDel, 0, Qt::AlignRight);
+        rightLayout->addWidget(btnDel, 0, Qt::AlignCenter);
     }
+    headerLayout->addWidget(rightContainer);
     
     layout->addLayout(headerLayout);
     // Content container

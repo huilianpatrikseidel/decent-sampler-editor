@@ -131,7 +131,7 @@ GlobalLfoCardWidget::GlobalLfoCardWidget(ProjectManager* pm, const LFO& lfoData,
         QVBoxLayout* kl = new QVBoxLayout();
         kl->setSpacing(2);
         QLabel* nl = new QLabel(label);
-        nl->setStyleSheet("font-size: 12px;  font-weight: 600;");
+        QFont f = nl->font(); f.setPointSize(10); f.setBold(true); nl->setFont(f);
         kl->addWidget(nl, 0, Qt::AlignCenter);
         
         auto provider = ModSourceHelper::createProvider(pm);
@@ -150,7 +150,7 @@ GlobalLfoCardWidget::GlobalLfoCardWidget(ProjectManager* pm, const LFO& lfoData,
         kl->addWidget(knob, 0, Qt::AlignCenter);
         
         QLabel* valLabel = new QLabel(QString::number(val, 'f', 2));
-        valLabel->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace;");
+        QFont vf = valLabel->font(); vf.setPointSize(8); vf.setFamily("Consolas"); valLabel->setFont(vf);
         valLabel->setAlignment(Qt::AlignCenter);
         kl->addWidget(valLabel, 0, Qt::AlignCenter);
         

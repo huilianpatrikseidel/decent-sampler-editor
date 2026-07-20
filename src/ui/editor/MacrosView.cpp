@@ -18,7 +18,20 @@ MacrosView::MacrosView(ProjectManager* pm, QWidget* parent)
     m_layout->setContentsMargins(0, 0, 0, 0);
     setLayout(m_layout);
     
-    connect(m_pm->getAudioState(), &AudioStateModel::globalMacrosChanged, this, &MacrosView::updateForm);
+    connect(m_pm->getAudioState(), &AudioStateModel::globalMacrosChanged, this, [this]() {
+        const auto& macros = m_pm->getAudioState()->getGlobalMacros();
+        bool needsRebuild = (macros.size() != m_macroKnobs.size());
+        if (!needsRebuild) {
+            for (const auto& m : macros) {
+                if (!m_macroKnobs.contains(m.id)) {
+                    needsRebuild = true;
+                    break;
+                }
+            }
+        }
+        if (needsRebuild) updateForm();
+        else updateValues();
+    });
     connect(m_pm, &ProjectManager::nodeModified, this, [this](const QUuid& id, const QString& prop) {
         if (m_isUpdating) return;
         if (prop == "routings") {
@@ -40,6 +53,8 @@ void MacrosView::updateForm() {
     if (oldScroll && oldScroll->verticalScrollBar()) {
         m_savedScrollPos = oldScroll->verticalScrollBar()->value();
     }
+    
+    m_macroKnobs.clear();
     
     while (QLayoutItem* item = m_layout->takeAt(0)) {
         if (QWidget* w = item->widget()) w->deleteLater();
@@ -87,13 +102,20 @@ void MacrosView::updateForm() {
         knob->setMinimum(0.0);
         knob->setMaximum(1.0);
         knob->setValue(macro.value);
+        m_macroKnobs.insert(macro.id, knob);
         
-        connect(knob, &SynthKnobWidget::valueChanged, this, [this, macro](double v) {
+        connect(knob, &SynthKnobWidget::valueChanged, this, [this, macroId = macro.id](double v) {
             if (m_isUpdating) return;
-            GlobalMacro updated = macro;
-            updated.value = v;
-            m_pm->getAudioState()->updateGlobalMacro(macro.id, updated);
-            m_pm->setDirty(true);
+            const auto& macros = m_pm->getAudioState()->getGlobalMacros();
+            for (const auto& m : macros) {
+                if (m.id == macroId) {
+                    GlobalMacro updated = m;
+                    updated.value = v;
+                    m_pm->getAudioState()->updateGlobalMacro(macroId, updated);
+                    m_pm->setDirty(true);
+                    break;
+                }
+            }
         });
         
         kl->addWidget(knob, 0, Qt::AlignCenter);
@@ -333,4 +355,15 @@ void MacrosView::updateForm() {
         QScrollArea* scroll = findChild<QScrollArea*>();
         if (scroll && scroll->verticalScrollBar()) scroll->verticalScrollBar()->setValue(m_savedScrollPos);
     });
+}
+
+void MacrosView::updateValues() {
+    m_isUpdating = true;
+    const auto& macros = m_pm->getAudioState()->getGlobalMacros();
+    for (const auto& m : macros) {
+        if (m_macroKnobs.contains(m.id)) {
+            m_macroKnobs[m.id]->setValue(m.value);
+        }
+    }
+    m_isUpdating = false;
 }

@@ -25,6 +25,7 @@ public:
     bool isReleasing() const { return m_adsr.getState() == AdsrEnvelope::Release; }
     
     void setTargetNote(int note, float glideTime);
+    void updateParameters(const AudioMessage& msg);
 
 private:
     bool m_active;

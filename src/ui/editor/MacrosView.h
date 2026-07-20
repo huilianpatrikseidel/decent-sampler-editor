@@ -3,6 +3,9 @@
 #include <QVBoxLayout>
 #include <QUuid>
 #include "../../core/ProjectManager.h"
+#include <QMap>
+
+class SynthKnobWidget;
 
 class MacrosView : public QWidget {
     Q_OBJECT
@@ -11,6 +14,7 @@ public:
 
 private slots:
     void updateForm();
+    void updateValues();
 
 private:
     ProjectManager* m_pm;
@@ -19,4 +23,5 @@ private:
     int m_savedScrollPos = 0;
     
     QUuid m_focusedMacroId;
+    QMap<QUuid, SynthKnobWidget*> m_macroKnobs;
 };

@@ -207,7 +207,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     QVBoxLayout* cutoffLayout = new QVBoxLayout();
     cutoffLayout->setSpacing(2);
     QLabel* cutoffLabel = new QLabel("Cutoff");
-    cutoffLabel->setStyleSheet("font-size: 12px;  font-weight: 600;");
+    QFont f1 = cutoffLabel->font(); f1.setPointSize(10); f1.setBold(true); cutoffLabel->setFont(f1);
     cutoffLayout->addWidget(cutoffLabel, 0, Qt::AlignCenter);
     
     m_cutoffKnob = new SynthKnobWidget();
@@ -220,7 +220,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     cutoffLayout->addWidget(m_cutoffKnob, 0, Qt::AlignCenter);
     
     QLabel* cutoffVal = new QLabel(QString::number(20000.0, 'f', 0));
-    cutoffVal->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace;");
+    QFont vf1 = cutoffVal->font(); vf1.setPointSize(8); vf1.setFamily("Consolas"); cutoffVal->setFont(vf1);
     cutoffVal->setAlignment(Qt::AlignCenter);
     cutoffLayout->addWidget(cutoffVal, 0, Qt::AlignCenter);
     connect(m_cutoffKnob, &SynthKnobWidget::valueChanged, cutoffVal, [cutoffVal](double v) {
@@ -233,7 +233,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     QVBoxLayout* resLayout = new QVBoxLayout();
     resLayout->setSpacing(2);
     QLabel* resLabel = new QLabel("Resonance");
-    resLabel->setStyleSheet("font-size: 12px;  font-weight: 600;");
+    QFont f2 = resLabel->font(); f2.setPointSize(10); f2.setBold(true); resLabel->setFont(f2);
     resLayout->addWidget(resLabel, 0, Qt::AlignCenter);
     
     m_resonanceKnob = new SynthKnobWidget();
@@ -245,7 +245,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     resLayout->addWidget(m_resonanceKnob, 0, Qt::AlignCenter);
     
     QLabel* resVal = new QLabel(QString::number(1.0, 'f', 2));
-    resVal->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace;");
+    QFont vf2 = resVal->font(); vf2.setPointSize(8); vf2.setFamily("Consolas"); resVal->setFont(vf2);
     resVal->setAlignment(Qt::AlignCenter);
     resLayout->addWidget(resVal, 0, Qt::AlignCenter);
     connect(m_resonanceKnob, &SynthKnobWidget::valueChanged, resVal, [resVal](double v) {
@@ -258,7 +258,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     QVBoxLayout* envLayout = new QVBoxLayout();
     envLayout->setSpacing(2);
     QLabel* envLabel = new QLabel("Env Depth");
-    envLabel->setStyleSheet("font-size: 12px;  font-weight: 600;");
+    QFont f3 = envLabel->font(); f3.setPointSize(10); f3.setBold(true); envLabel->setFont(f3);
     envLayout->addWidget(envLabel, 0, Qt::AlignCenter);
     
     m_envDepthKnob = new SynthKnobWidget();
@@ -270,7 +270,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     envLayout->addWidget(m_envDepthKnob, 0, Qt::AlignCenter);
     
     QLabel* envVal = new QLabel(QString::number(0.0, 'f', 2));
-    envVal->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace;");
+    QFont vf3 = envVal->font(); vf3.setPointSize(8); vf3.setFamily("Consolas"); envVal->setFont(vf3);
     envVal->setAlignment(Qt::AlignCenter);
     envLayout->addWidget(envVal, 0, Qt::AlignCenter);
     connect(m_envDepthKnob, &SynthKnobWidget::valueChanged, envVal, [envVal](double v) {
@@ -283,7 +283,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     QVBoxLayout* ktLayout = new QVBoxLayout();
     ktLayout->setSpacing(2);
     QLabel* ktLabel = new QLabel("KeyTrack");
-    ktLabel->setStyleSheet("font-size: 12px;  font-weight: 600;");
+    QFont f4 = ktLabel->font(); f4.setPointSize(10); f4.setBold(true); ktLabel->setFont(f4);
     ktLayout->addWidget(ktLabel, 0, Qt::AlignCenter);
     
     m_keyTrackKnob = new SynthKnobWidget();
@@ -295,7 +295,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
     ktLayout->addWidget(m_keyTrackKnob, 0, Qt::AlignCenter);
     
     QLabel* ktVal = new QLabel(QString::number(0.0, 'f', 2));
-    ktVal->setStyleSheet("font-size: 10px;  font-family: Consolas, monospace;");
+    QFont vf4 = ktVal->font(); vf4.setPointSize(8); vf4.setFamily("Consolas"); ktVal->setFont(vf4);
     ktVal->setAlignment(Qt::AlignCenter);
     ktLayout->addWidget(ktVal, 0, Qt::AlignCenter);
     connect(m_keyTrackKnob, &SynthKnobWidget::valueChanged, ktVal, [ktVal](double v) {
