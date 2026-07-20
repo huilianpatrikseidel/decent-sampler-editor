@@ -18,3 +18,7 @@ Makefile
 *.vcxproj.filters
 *.dir/
 .vs/
+Deploy/
+vcpkg_installed/
+vcpkg/
+*.vst3
