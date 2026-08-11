@@ -344,7 +344,14 @@ void GroupEditorView::rebuildForm() {
     columnsLayout->addWidget(voiceWidget, 1);
     columnsLayout->addWidget(filterWidgetContainer, 1);
     columnsLayout->addWidget(envelopesWidget, 2);
-    
+
+    if (isSynth) {
+        // Synths edit their Filter/Envelopes in the dedicated cards of the center
+        // editor, so hide these redundant columns here (keep the group-level settings).
+        filterWidgetContainer->setVisible(false);
+        envelopesWidget->setVisible(false);
+    }
+
     m_layout->addWidget(columnsWidget);
     
     m_isUpdatingUI = false;

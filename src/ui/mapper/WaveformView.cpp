@@ -4,7 +4,7 @@
 #include <QMenu>
 #include <QAction>
 #include "../../core/ThemePalette.h"
-#include "../../core/commands/ModifyZonePropertyCommand.h"
+#include "commands/ModifyZonePropertyCommand.h"
 #include "WaveformAudioLoader.h"
 #include "../../thirdparty/miniaudio/miniaudio.h"
 

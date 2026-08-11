@@ -1,7 +1,7 @@
 #pragma once
 #include <QUndoCommand>
 #include <QVariant>
-#include "../ProjectManager.h"
+#include "core/ProjectManager.h"
 
 class ModifyZonePropertyCommand : public QUndoCommand {
 public:

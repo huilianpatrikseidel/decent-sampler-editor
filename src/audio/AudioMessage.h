@@ -32,6 +32,10 @@ struct AudioMessage {
     // Sample Playback
     int velocity = 100;
     char sampleId[256] = {0};
+    // Streaming data source (ma_resource_manager_data_source*) opened off the audio
+    // thread and handed to the voice on PlayNote. Kept as void* so this header stays
+    // free of the miniaudio dependency. Null for oscillator voices / failed loads.
+    void* preparedSource = nullptr;
     
     // Envelope Data
     float attack = 0.0f;

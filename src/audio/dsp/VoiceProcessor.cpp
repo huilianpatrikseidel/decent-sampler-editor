@@ -2,7 +2,7 @@
 #include <cmath>
 #include <algorithm>
 
-VoiceProcessor::VoiceProcessor() : m_active(false), m_hasDataSource(false), m_readPointer(0.0), m_rootNote(60), m_playingNote(60), m_volume(1.0f) {
+VoiceProcessor::VoiceProcessor() : m_active(false), m_readPointer(0.0), m_rootNote(60), m_playingNote(60), m_volume(1.0f) {
     for (int i=0; i<4; ++i) {
         m_historyL[i] = 0.0f;
         m_historyR[i] = 0.0f;
@@ -10,38 +10,27 @@ VoiceProcessor::VoiceProcessor() : m_active(false), m_hasDataSource(false), m_re
 }
 
 VoiceProcessor::~VoiceProcessor() {
-    if (m_hasDataSource) {
-        ma_resource_manager_data_source_uninit(&m_dataSource);
+    if (m_dataSource) {
+        ma_resource_manager_data_source_uninit(m_dataSource);
+        delete m_dataSource;
+        m_dataSource = nullptr;
     }
 }
 
-bool VoiceProcessor::init(ma_resource_manager* rm, const char* filepath) {
-    if (m_hasDataSource) {
-        ma_resource_manager_data_source_uninit(&m_dataSource);
-        m_hasDataSource = false;
+ma_resource_manager_data_source* VoiceProcessor::adopt(ma_resource_manager_data_source* src) {
+    ma_resource_manager_data_source* old = m_dataSource;
+    m_dataSource = src;
+    m_readPointer = 0.0;
+    return old;
+}
+
+void VoiceProcessor::releaseSource() {
+    m_active = false;
+    if (m_dataSource) {
+        ma_resource_manager_data_source_uninit(m_dataSource);
+        delete m_dataSource;
+        m_dataSource = nullptr;
     }
-    
-    ma_result res = ma_resource_manager_data_source_init(
-        rm, 
-        filepath, 
-        MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_STREAM | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC, 
-        NULL, 
-        &m_dataSource
-    );
-    
-    if (res == MA_SUCCESS) {
-        m_hasDataSource = true;
-        // Pre-read 1 frame to seed interpolation history
-        float temp[2] = {0.0f, 0.0f};
-        ma_uint64 read = 0;
-        ma_data_source_read_pcm_frames(&m_dataSource, temp, 1, &read);
-        if (read > 0) {
-            m_historyL[1] = temp[0]; m_historyL[2] = temp[0];
-            m_historyR[1] = temp[1]; m_historyR[2] = temp[1];
-        }
-        return true;
-    }
-    return false;
 }
 
 void VoiceProcessor::initOscillator(const AudioMessage& msg) {
@@ -58,7 +47,7 @@ void VoiceProcessor::initOscillator(const AudioMessage& msg) {
         default: m_oscillator.setWaveform(Oscillator::Waveform::Saw); break;
     }
     
-    m_oscillator.setSampleRate(44100.0);
+    m_oscillator.setSampleRate(m_sampleRate);
     m_oscillator.setDamping(msg.oscDamping);
     m_oscillator.noteOn(msg.note, msg.velocity);
 }
@@ -98,7 +87,7 @@ void VoiceProcessor::trigger(const AudioMessage& msg, int rootNote) {
             case 3: svfType = StateVariableFilter::Type::Notch; break;
         }
         m_svfL.reset(); m_svfR.reset();
-        m_svfL.setSampleRate(44100.0); m_svfR.setSampleRate(44100.0);
+        m_svfL.setSampleRate(m_sampleRate); m_svfR.setSampleRate(m_sampleRate);
         m_svfL.setType(svfType); m_svfR.setType(svfType);
         m_svfL.setCutoff(m_filterCutoff); m_svfR.setCutoff(m_filterCutoff);
         m_svfL.setResonance(m_filterResonance); m_svfR.setResonance(m_filterResonance);
@@ -115,15 +104,15 @@ void VoiceProcessor::trigger(const AudioMessage& msg, int rootNote) {
         m_historyR[i] = 0.0f;
     }
     
-    m_adsr.trigger(msg.attack, msg.decay, msg.sustain, msg.release, 44100.0f);
-    m_modAdsr.trigger(msg.modAttack, msg.modDecay, msg.modSustain, msg.modRelease, 44100.0f);
+    m_adsr.trigger(msg.attack, msg.decay, msg.sustain, msg.release, static_cast<float>(m_sampleRate));
+    m_modAdsr.trigger(msg.modAttack, msg.modDecay, msg.modSustain, msg.modRelease, static_cast<float>(m_sampleRate));
 }
 
 void VoiceProcessor::setTargetNote(int note, float glideTime) {
     m_playingNote = note;
     m_targetPitchOffset = static_cast<float>(note - m_rootNote);
     if (glideTime > 0.001f) {
-        float samples = glideTime * 44100.0f;
+        float samples = glideTime * static_cast<float>(m_sampleRate);
         m_glideRate = (m_targetPitchOffset - m_currentPitchOffset) / samples;
     } else {
         m_currentPitchOffset = m_targetPitchOffset;
@@ -167,7 +156,15 @@ void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& o
         outR = 0.0f;
         return;
     }
-    
+
+    // A sample voice with no data source (e.g. slot reclaimed) produces silence.
+    if (!m_isOscillator && !m_dataSource) {
+        m_active = false;
+        outL = 0.0f;
+        outR = 0.0f;
+        return;
+    }
+
     // Process Envelopes
     float envAmp = m_adsr.process();
     float modEnvAmp = m_modAdsr.process();
@@ -240,7 +237,7 @@ void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& o
             
             float frame[2] = {0.0f, 0.0f};
             ma_uint64 framesRead = 0;
-            ma_data_source_read_pcm_frames(&m_dataSource, frame, 1, &framesRead);
+            ma_data_source_read_pcm_frames(m_dataSource, frame, 1, &framesRead);
             
             if (framesRead == 0) {
                 if (m_adsr.getState() != AdsrEnvelope::Release) m_adsr.release();
@@ -303,8 +300,8 @@ void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& o
 
 void VoiceProcessor::updateParameters(const AudioMessage& msg) {
     // Update ADSR
-    m_adsr.setParameters(msg.attack, msg.decay, msg.sustain, msg.release, 44100.0f);
-    m_modAdsr.setParameters(msg.modAttack, msg.modDecay, msg.modSustain, msg.modRelease, 44100.0f);
+    m_adsr.setParameters(msg.attack, msg.decay, msg.sustain, msg.release, static_cast<float>(m_sampleRate));
+    m_modAdsr.setParameters(msg.modAttack, msg.modDecay, msg.modSustain, msg.modRelease, static_cast<float>(m_sampleRate));
     
     // Update Routing
     m_numRoutings = msg.numRoutings;

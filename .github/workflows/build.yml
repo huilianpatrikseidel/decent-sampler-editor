@@ -2,33 +2,36 @@ name: Build and Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      # Report every platform independently instead of cancelling the others.
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        
-    steps:
-    - uses: actions/checkout@v3
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
-    - name: Install Dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v4
+
+    # RtMidi's ALSA backend, OpenGL and xkbcommon dev headers for the Qt/Linux build.
+    - name: Install Linux system dependencies
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y qt6-base-dev qt6-declarative-dev qt6-svg-dev cmake build-essential libasound2-dev libgl1-mesa-dev
+        sudo apt-get install -y libasound2-dev libgl1-mesa-dev libxkbcommon-dev
 
-    - name: Install Qt (Windows/macOS)
-      if: matrix.os != 'ubuntu-latest'
-      uses: jurplel/install-qt-action@v3
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
       with:
-        version: '6.5.0'
-        modules: 'qt5compat qtmultimedia qtsvg'
+        version: '6.11.1'
+        # qtbase provides Core/Gui/Widgets/Sql/Test; qtsvg provides Svg/SvgWidgets.
+        modules: 'qtsvg'
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
@@ -38,4 +41,7 @@ jobs:
 
     - name: Run Tests
       working-directory: ${{github.workspace}}/build
+      # offscreen platform lets the QtTest GUI tests run on headless CI runners.
       run: ctest -C Release --output-on-failure
+      env:
+        QT_QPA_PLATFORM: offscreen

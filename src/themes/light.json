@@ -87,5 +87,10 @@
     "card_controls_bg": "#fafafa",
     "card_border": "1px solid #D0D0D0",
     "card_inner_border": "1px solid #C0C0C0",
-    "knob_value_arc": "#ff6600"
+    "knob_value_arc": "#ff6600",
+    "accent_brand": "#ff6600",
+    "accent_oscillator": "#C9871A",
+    "accent_filter": "#2E7FD6",
+    "accent_envelope": "#2FA855",
+    "accent_lfo": "#8B4FE0"
 }

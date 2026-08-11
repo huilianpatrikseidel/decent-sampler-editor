@@ -35,44 +35,62 @@ void SequenceGraphWidget::paintEvent(QPaintEvent* event) {
     p.fillRect(rect(), ThemePalette::color("qss_color_22"));
     
     if (m_steps.isEmpty()) return;
-    
+
+    const int H = height();
     float stepWidth = width() / (float)m_steps.size();
+    QColor barBase = ThemePalette::color("accent_brand", QColor(255, 102, 0));
+
     for (int i = 0; i < m_steps.size(); ++i) {
-        QRectF stepRect(i * stepWidth, 0, stepWidth - 2, height());
-        
-        // Draw background track
-        if (i == m_activeStep) {
-            p.fillRect(stepRect, ThemePalette::color("qss_color_18")); // Highlight active step
-        } else {
-            p.fillRect(stepRect, ThemePalette::color("qss_color_25"));
-        }
-        
-        // Draw velocity bar
-        float velHeight = m_steps[i].velocity * height();
-        QRectF barRect(stepRect.x(), height() - velHeight, stepRect.width(), velHeight);
-        
+        QRectF stepRect(i * stepWidth, 0, stepWidth - 2, H);
+
+        // Background track: alternate shade every 4 steps (beat grouping); brighten the playing step.
+        QColor trackCol = ((i / 4) % 2 == 0) ? ThemePalette::color("qss_color_25", QColor(30, 30, 30))
+                                             : ThemePalette::color("qss_color_18", QColor(45, 45, 45));
+        if (i == m_activeStep) trackCol = ThemePalette::color("qss_color_11", QColor(70, 70, 70));
+        p.fillRect(stepRect, trackCol);
+
+        // Velocity bar: height AND opacity both encode velocity so it reads at a glance.
+        float vel = m_steps[i].velocity;
+        float velHeight = vel * H;
+        QRectF barRect(stepRect.x(), H - velHeight, stepRect.width(), velHeight);
+
+        QColor barCol = barBase;
+        barCol.setAlpha(i == m_activeStep ? 255 : 90 + int(vel * 165.0f));
         QLinearGradient grad(barRect.topLeft(), barRect.bottomLeft());
-        grad.setColorAt(0, ThemePalette::color("qss_color_6", QColor(255, 120, 30)));
-        grad.setColorAt(1, ThemePalette::color("qss_color_6", QColor(200, 80, 0)));
+        grad.setColorAt(0, barCol.lighter(120));
+        grad.setColorAt(1, barCol);
         p.fillRect(barRect, grad);
-        
-        // Draw text: Note and Length
+
+        // Note name (pitch)
         p.setPen(ThemePalette::color("qss_color_8"));
         QFont f = p.font();
         f.setPointSize(8);
         f.setBold(true);
         p.setFont(f);
         p.drawText(stepRect.adjusted(0, 4, 0, 0), Qt::AlignTop | Qt::AlignHCenter, midiNoteToName(m_steps[i].note));
-        
-        p.setPen(ThemePalette::color("qss_color_17"));
+
+        // Length label only when it differs from the default (1.00x) — cuts clutter.
+        if (std::abs(m_steps[i].length - 1.0f) > 0.001f) {
+            p.setPen(ThemePalette::color("qss_color_17"));
+            f.setBold(false);
+            f.setPointSize(7);
+            p.setFont(f);
+            p.drawText(stepRect.adjusted(0, 18, 0, 0), Qt::AlignTop | Qt::AlignHCenter, QString::number(m_steps[i].length, 'f', 2) + "x");
+        }
+
+        // Step number
+        p.setPen(ThemePalette::color("qss_color_9"));
         f.setBold(false);
         f.setPointSize(7);
         p.setFont(f);
-        p.drawText(stepRect.adjusted(0, 18, 0, 0), Qt::AlignTop | Qt::AlignHCenter, QString::number(m_steps[i].length, 'f', 2) + "x");
-        
-        // Draw step number at bottom
-        p.setPen(ThemePalette::color("qss_color_9"));
         p.drawText(stepRect.adjusted(0, 0, 0, -4), Qt::AlignBottom | Qt::AlignHCenter, QString::number(i + 1));
+    }
+
+    // Beat divider lines every 4 steps for positional readability.
+    p.setPen(QPen(ThemePalette::color("qss_color_14", QColor(62, 62, 66)), 1));
+    for (int b = 4; b < m_steps.size(); b += 4) {
+        float x = b * stepWidth;
+        p.drawLine(QPointF(x, 0), QPointF(x, H));
     }
 }
 

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <QPen>
 #include <QMouseEvent>
+#include "../../core/ThemePalette.h"
 
 LFOGraphWidget::LFOGraphWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("NeumorphicInner");
@@ -101,17 +102,22 @@ void LFOGraphWidget::paintEvent(QPaintEvent* event) {
     fillPath.lineTo(rect.left(), midY);
     fillPath.closeSubpath();
     
+    // LFO identity colour comes from the theme (accent_lfo); alpha is applied per state.
+    QColor lfoColor = ThemePalette::color("accent_lfo", QColor(200, 100, 255));
     QLinearGradient gradient(0, rect.top(), 0, rect.bottom());
     int fillAlpha = isEnabled() ? 120 : 40;
-    gradient.setColorAt(0.0, QColor(180, 80, 255, fillAlpha));
-    gradient.setColorAt(0.5, QColor(180, 80, 255, 0));
-    gradient.setColorAt(1.0, QColor(180, 80, 255, fillAlpha));
-    
+    QColor fillEdge = lfoColor; fillEdge.setAlpha(fillAlpha);
+    QColor fillMid  = lfoColor; fillMid.setAlpha(0);
+    gradient.setColorAt(0.0, fillEdge);
+    gradient.setColorAt(0.5, fillMid);
+    gradient.setColorAt(1.0, fillEdge);
+
     painter.fillPath(fillPath, gradient);
-    
+
 
     // Draw solid outline
-    QPen outlinePen(isEnabled() ? QColor(200, 100, 255) : QColor(200, 100, 255, 80), 2); // Purple for LFO
+    QColor outlineColor = lfoColor; if (!isEnabled()) outlineColor.setAlpha(80);
+    QPen outlinePen(outlineColor, 2);
     outlinePen.setCapStyle(Qt::RoundCap);
     outlinePen.setJoinStyle(Qt::RoundJoin);
     painter.setPen(outlinePen);

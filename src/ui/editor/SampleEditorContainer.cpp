@@ -2,7 +2,7 @@
 #include "../mapper/WaveformView.h"
 #include "../waveform/WaveformEditorView.h"
 #include "../inspector/AdsrEditorView.h"
-#include "../../core/commands/ModifyZonePropertyCommand.h"
+#include "commands/ModifyZonePropertyCommand.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>

@@ -30,7 +30,7 @@ protected:
         p.setClipPath(clipPath);
 
         const QString waveId = m_owner->waveform();
-        QColor accent = ThemePalette::color("qss_color_6", QColor(0xFF, 0x66, 0x00));
+        QColor accent = ThemePalette::color("accent_oscillator", QColor(0xF2, 0xB3, 0x3D));
         QColor orange = accent;
         if (!isEnabled()) orange.setAlpha(80);
         const int w = width();

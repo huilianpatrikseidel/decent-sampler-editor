@@ -100,8 +100,6 @@ void ApplicationController::updateRenderGraph() {
 }
 
 void ApplicationController::playNote(int midiNote, int velocity) {
-    bool found = false;
-    
     auto zones = std::atomic_load(&m_renderZones);
     if (zones) {
         for (const auto& z : *zones) {
@@ -141,19 +139,21 @@ void ApplicationController::playNote(int midiNote, int velocity) {
                 msg.isOscillator = z.isOscillator;
                 msg.oscWaveform = z.oscWaveform;
                 msg.oscDamping = z.oscDamping;
-                
+
+                // Open the streaming sample here (off the audio thread) and hand the
+                // ready source to the voice; the audio callback never touches the disk.
+                if (!z.isOscillator) {
+                    msg.preparedSource = m_audioEngine.prepareSampleSource(z.sampleId.c_str());
+                }
+
                 msg.numRoutings = z.numRoutings;
                 for (int i = 0; i < z.numRoutings; ++i) {
                     msg.routings[i] = z.routings[i];
                 }
                 
                 m_audioEngine.pushCommand(msg);
-                found = true;
             }
         }
-    }
-    
-    if (!found) { // Synth Fallback removed for architectural cleanliness.
     }
 }
 

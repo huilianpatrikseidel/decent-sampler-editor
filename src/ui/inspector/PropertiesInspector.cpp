@@ -21,6 +21,7 @@ PropertiesInspector::PropertiesInspector(ProjectManager* pm, QWidget* parent)
     m_layout = new QFormLayout(this);
     setLayout(m_layout);
     clearForm();
+    showEmptyState();
 }
 
 void PropertiesInspector::clearForm() {
@@ -29,6 +30,9 @@ void PropertiesInspector::clearForm() {
         delete item->widget();
         delete item;
     }
+}
+
+void PropertiesInspector::showEmptyState() {
     m_layout->addRow(new QLabel("No node selected"));
 }
 
@@ -42,6 +46,8 @@ void PropertiesInspector::setNode(const QUuid& id) {
     if (Node* node = m_pm->getNode(id)) {
         NodeInspectorStrategy strategy(node, id);
         strategy.buildForm(m_layout, this);
+    } else {
+        showEmptyState();
     }
     m_isUpdatingUI = false;
 }
@@ -81,8 +87,11 @@ void PropertiesInspector::setZone(const QUuid& groupId, int zoneIndex) {
         if (zoneIndex >= 0 && zoneIndex < sg->zones.size()) {
             ZoneInspectorStrategy strategy(&sg->zones[zoneIndex], groupId, zoneIndex);
             strategy.buildForm(m_layout, this);
+            m_isUpdatingUI = false;
+            return;
         }
     }
+    showEmptyState();
     m_isUpdatingUI = false;
 }
 

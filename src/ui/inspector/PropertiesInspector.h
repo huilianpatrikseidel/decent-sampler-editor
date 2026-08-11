@@ -52,5 +52,6 @@ private:
     QSlider* m_panSlider;
     
     void clearForm();
+    void showEmptyState();
     bool m_isUpdatingUI = false;
 };

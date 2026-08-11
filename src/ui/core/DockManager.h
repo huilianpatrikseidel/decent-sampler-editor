@@ -61,6 +61,7 @@ private:
     
     QWidget* m_centralContainer;
     QWidget* m_editorPanel;
+    class QSplitter* m_centralSplitter = nullptr;
     QTabWidget* m_editorTabs = nullptr;
     
     SampleEditorContainer* m_sampleEditorContainer = nullptr;

@@ -5,17 +5,29 @@
 #include "StateVariableFilter.h"
 #include "../AudioMessage.h"
 #include "../AudioState.h"
+#include "../AudioEngineExport.h"
 
-class VoiceProcessor {
+class AUDIOENGINE_EXPORT VoiceProcessor {
 public:
     VoiceProcessor();
     ~VoiceProcessor();
     
-    bool init(ma_resource_manager* rm, const char* filepath);
     void initOscillator(const AudioMessage& msg);
     void trigger(const AudioMessage& msg, int rootNote = 60);
     void release();
     void kill();
+
+    // Take ownership of a data source prepared on a non-audio thread and return the
+    // previously-held one (or nullptr) for disposal off the audio thread. Allocation-
+    // and lock-free: safe to call from the audio callback.
+    ma_resource_manager_data_source* adopt(ma_resource_manager_data_source* src);
+
+    // Uninit + free the held source. Only call with the audio device stopped, since
+    // uninit touches the resource manager and frees memory.
+    void releaseSource();
+
+    // Must be set (from the audio device rate) before any trigger; defaults to 44100.
+    void setSampleRate(double sampleRate) { if (sampleRate > 0.0) m_sampleRate = sampleRate; }
     
     void process(float lfo1Val, float lfo2Val, float& outL, float& outR, GlobalAudioState* state);
 
@@ -30,10 +42,11 @@ public:
 private:
     bool m_active;
     bool m_isOscillator = false;  // true = oscillator synthesis, false = sample playback
+    double m_sampleRate = 44100.0;  // audio device rate, set via setSampleRate()
     
-    // Sample playback
-    ma_resource_manager_data_source m_dataSource;
-    bool m_hasDataSource;
+    // Sample playback. The voice borrows this pointer (prepared on another thread);
+    // ownership is transferred in/out via adopt()/releaseSource().
+    ma_resource_manager_data_source* m_dataSource = nullptr;
     float m_historyL[4];
     float m_historyR[4];
     double m_readPointer;

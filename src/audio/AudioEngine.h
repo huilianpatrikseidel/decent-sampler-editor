@@ -39,7 +39,16 @@ public:
     void stop();
 
     void pushCommand(const AudioMessage& msg);
-    
+
+    // Open a streaming data source for a sample on the CALLING (non-audio) thread and
+    // return an opaque handle to embed in AudioMessage::preparedSource. Returns nullptr
+    // on failure. The audio callback never opens files or allocates — it only adopts.
+    void* prepareSampleSource(const char* filepath);
+
+    // Dispose a handle from prepareSampleSource that was NOT handed to a PlayNote
+    // message (mutually exclusive with playing it). Safe on any non-audio thread.
+    void disposePreparedSource(void* handle);
+
     void setMasterEffectsAsync(std::vector<Vst3Host*>* newEffects);
     
     GlobalAudioState* getAudioState() { return &m_audioState; }
@@ -72,6 +81,11 @@ private:
 
     static void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     void processAudio(float* outputBuffer, ma_uint32 frameCount);
+
+    // Finished/orphaned data sources produced by the audio thread, disposed off-thread.
+    moodycamel::ConcurrentQueue<ma_resource_manager_data_source*> m_freeQueue;
+    void drainFreeQueue();            // uninit+delete queued sources (non-audio thread)
+    void releaseAllVoiceSources();    // dispose every voice's source; device must be stopped
 
     std::atomic<std::vector<Vst3Host*>*> m_activeVstEffects{nullptr};
 

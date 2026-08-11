@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QtMath>
+#include "../../core/ThemePalette.h"
 
 // ---------------------------------------------------------------------------
 // Inner widget that draws the frequency response curve
@@ -30,7 +31,8 @@ protected:
         clipPath.addRoundedRect(this->rect(), 8, 8);
         p.setClipPath(clipPath);
 
-        const QColor orange = isEnabled() ? QColor(0xFF, 0x66, 0x00) : QColor(0xFF, 0x66, 0x00, 80);
+        QColor accent = ThemePalette::color("accent_filter", QColor(0x4E, 0xA1, 0xF7));
+        if (!isEnabled()) accent.setAlpha(80);
         const int w = width();
         const int h = height();
         const double pad = 6.0;
@@ -90,7 +92,7 @@ protected:
             else         path.lineTo(px, y);
         }
 
-        QPen pen(orange, 2.0);
+        QPen pen(accent, 2.0);
         p.setPen(pen);
         p.drawPath(path);
 
@@ -149,7 +151,7 @@ FilterSectionWidget::FilterSectionWidget(QWidget* parent)
             pix.fill(Qt::transparent);
             QPainter p(&pix);
             p.setRenderHint(QPainter::Antialiasing);
-            QPen pen(checked ? QColor("#ff6600") : QColor("#888888"), 1.5);
+            QPen pen(checked ? ThemePalette::color("accent_filter", QColor(0x4E, 0xA1, 0xF7)) : QColor("#888888"), 1.5);
             p.setPen(pen);
             
             QPainterPath path;

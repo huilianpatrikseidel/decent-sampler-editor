@@ -11,6 +11,9 @@ AudioEngine::AudioEngine() {
 AudioEngine::~AudioEngine() {
     stop();
     if (m_isInitialized) {
+        // Dispose voice sources (and any queued ones) while the resource manager is
+        // still alive — data-source uninit references it.
+        releaseAllVoiceSources();
         ma_device_uninit(&m_device);
         ma_resource_manager_uninit(&m_resourceManager);
     }
@@ -24,6 +27,52 @@ AudioEngine::~AudioEngine() {
 
 void AudioEngine::pushCommand(const AudioMessage& msg) {
     m_queue.enqueue(msg);
+}
+
+void* AudioEngine::prepareSampleSource(const char* filepath) {
+    // Runs on the note-trigger thread (MIDI/UI), never the audio callback.
+    drainFreeQueue(); // opportunistically reclaim sources finished by the audio thread
+    if (!m_isInitialized || !filepath || filepath[0] == '\0') {
+        return nullptr;
+    }
+
+    auto* src = new ma_resource_manager_data_source();
+    ma_result res = ma_resource_manager_data_source_init(
+        &m_resourceManager,
+        filepath,
+        MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_STREAM | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC,
+        NULL,
+        src);
+    if (res != MA_SUCCESS) {
+        delete src;
+        return nullptr;
+    }
+    return src;
+}
+
+void AudioEngine::disposePreparedSource(void* handle) {
+    if (handle) {
+        m_freeQueue.enqueue(static_cast<ma_resource_manager_data_source*>(handle));
+    }
+    drainFreeQueue();
+}
+
+void AudioEngine::drainFreeQueue() {
+    ma_resource_manager_data_source* src = nullptr;
+    while (m_freeQueue.try_dequeue(src)) {
+        if (src) {
+            ma_resource_manager_data_source_uninit(src);
+            delete src;
+        }
+    }
+}
+
+void AudioEngine::releaseAllVoiceSources() {
+    // Caller guarantees the device is stopped (no concurrent audio callback).
+    for (int i = 0; i < MAX_VOICES; ++i) {
+        m_voices[i].releaseSource();
+    }
+    drainFreeQueue();
 }
 
 void AudioEngine::setMasterEffectsAsync(std::vector<Vst3Host*>* newEffects) {
@@ -104,6 +153,16 @@ bool AudioEngine::initialize(const QString& deviceId, int sampleRate, int buffer
     m_currentDeviceName = QString::fromUtf8(m_device.playback.name);
     m_currentSampleRate = m_device.sampleRate;
 
+    // Propagate the actual device rate to every DSP stage. Without this the
+    // envelopes, filters, oscillators and LFOs run as if the device were 44.1 kHz,
+    // producing wrong timing/frequency at any other rate (e.g. 48 kHz).
+    const double deviceRate = static_cast<double>(m_currentSampleRate);
+    for (int i = 0; i < MAX_VOICES; ++i) {
+        m_voices[i].setSampleRate(deviceRate);
+    }
+    m_lfo1.setSampleRate(static_cast<float>(deviceRate));
+    m_lfo2.setSampleRate(static_cast<float>(deviceRate));
+
     if (contextInitialized) ma_context_uninit(&context);
 
     // Pre-allocate DSP buffers for audio callback
@@ -151,6 +210,9 @@ bool AudioEngine::reinitialize(const QString& deviceId, int sampleRate, int buff
     // Stop and uninit current device
     stop();
     if (m_isInitialized) {
+        // Voice sources reference the current resource manager — dispose them before
+        // it is torn down, or their pointers dangle across the reinit.
+        releaseAllVoiceSources();
         ma_device_uninit(&m_device);
         ma_resource_manager_uninit(&m_resourceManager);
         m_isInitialized = false;
@@ -185,8 +247,12 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
     AudioMessage msg;
     while (m_queue.try_dequeue(msg)) {
         if (msg.type == AudioCommandType::PlayNote) {
+            // Source was opened off the audio thread; here we only adopt pointers and
+            // hand finished ones to the free queue — no file I/O, alloc or free.
+            auto* prepared = static_cast<ma_resource_manager_data_source*>(msg.preparedSource);
+            bool preparedAdopted = false;
             bool handledLegato = false;
-            
+
             if (msg.isLegato) {
                 // Find if there is an active voice for this group
                 for (int i = 0; i < MAX_VOICES; ++i) {
@@ -197,19 +263,29 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
                     }
                 }
             }
-            
+
             if (!handledLegato) {
                 for (int i = 0; i < MAX_VOICES; ++i) {
                     if (!m_voices[i].isActive() || m_voices[i].isReleasing()) {
+                        ma_resource_manager_data_source* old = nullptr;
                         if (msg.isOscillator) {
-                            // Oscillator voice: no sample to load
+                            // Oscillator voice: drop any stale sample source the slot held.
+                            old = m_voices[i].adopt(nullptr);
                             m_voices[i].trigger(msg, msg.note);
-                        } else if (m_voices[i].init(&m_resourceManager, msg.sampleId)) {
+                        } else if (prepared) {
+                            old = m_voices[i].adopt(prepared);
+                            preparedAdopted = true;
                             m_voices[i].trigger(msg);
                         }
+                        if (old) m_freeQueue.enqueue(old);
                         break;
                     }
                 }
+            }
+
+            // Prepared source no voice took (legato handled, pool full): dispose off-thread.
+            if (prepared && !preparedAdopted) {
+                m_freeQueue.enqueue(prepared);
             }
         } else if (msg.type == AudioCommandType::StopNote) {
             for (int i = 0; i < MAX_VOICES; ++i) {

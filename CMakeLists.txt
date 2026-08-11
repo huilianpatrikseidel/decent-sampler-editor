@@ -8,7 +8,82 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC_COMPILER_PREDEFINES OFF)
 
+# --- Sanitizers (opt-in, OFF by default) -------------------------------------
+# Usage:  cmake -B build-asan -DENABLE_ASAN=ON [-DENABLE_UBSAN=ON]
+# The best target for the audio-lifecycle tests is SamplerEditorTests.
+# Toolchain note: needs an ASan-capable compiler. MinGW GCC on Windows ships no
+# libasan, and llvm-mingw's Windows ASan interceptor is unstable, so this is meant
+# for MSVC/Clang on Windows or (most reliably) GCC/Clang on Linux/macOS. The check
+# below fails fast with a clear message if the current toolchain cannot link it.
+option(ENABLE_ASAN  "Build with AddressSanitizer"            OFF)
+option(ENABLE_UBSAN "Build with UndefinedBehaviorSanitizer" OFF)
+
+if(ENABLE_ASAN OR ENABLE_UBSAN)
+    set(_san_compile "")
+    set(_san_link "")
+    if(MSVC)
+        if(ENABLE_ASAN)
+            list(APPEND _san_compile /fsanitize=address /Zi)
+        endif()
+        if(ENABLE_UBSAN)
+            message(WARNING "UBSan is unavailable with MSVC; ignoring ENABLE_UBSAN.")
+        endif()
+    else()
+        list(APPEND _san_compile -fno-omit-frame-pointer -g)
+        if(ENABLE_ASAN)
+            list(APPEND _san_compile -fsanitize=address)
+            list(APPEND _san_link    -fsanitize=address)
+        endif()
+        if(ENABLE_UBSAN)
+            list(APPEND _san_compile -fsanitize=undefined)
+            list(APPEND _san_link    -fsanitize=undefined)
+        endif()
+    endif()
+
+    # Verify the toolchain can actually compile AND link a sanitized binary.
+    include(CheckCXXSourceCompiles)
+    string(REPLACE ";" " " CMAKE_REQUIRED_FLAGS "${_san_compile};${_san_link}")
+    check_cxx_source_compiles("int main(){return 0;}" SANITIZER_TOOLCHAIN_OK)
+    unset(CMAKE_REQUIRED_FLAGS)
+    if(NOT SANITIZER_TOOLCHAIN_OK)
+        message(FATAL_ERROR
+            "Sanitizers requested but ${CMAKE_CXX_COMPILER_ID} at '${CMAKE_CXX_COMPILER}' "
+            "cannot link them. On Windows, MinGW GCC ships no libasan — use MSVC or Clang, "
+            "or run the sanitized build on Linux/macOS.")
+    endif()
+
+    add_compile_options(${_san_compile})
+    add_link_options(${_san_link})
+    message(STATUS "Sanitizers enabled (ASAN=${ENABLE_ASAN} UBSAN=${ENABLE_UBSAN})")
+endif()
+# -----------------------------------------------------------------------------
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg SvgWidgets Sql Test)
+
+# --- Platform build bits -----------------------------------------------------
+# Windows embeds version/icon metadata via generated .rc files and builds a
+# GUI-subsystem binary. On macOS/Linux the .rc variables expand to nothing (so
+# the same target source lists compile), and the GUI type differs.
+if(WIN32)
+    set(APP_GUI_TYPE WIN32)
+    set(RC_APP_ICON     ${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc)
+    set(RC_AUDIOENGINE  ${CMAKE_CURRENT_BINARY_DIR}/AudioEngineLib.rc)
+    set(RC_CORE         ${CMAKE_CURRENT_BINARY_DIR}/CoreLib.rc)
+    set(RC_TRANSPILERS  ${CMAKE_CURRENT_BINARY_DIR}/TranspilersLib.rc)
+    set(RC_NODEMAP      ${CMAKE_CURRENT_BINARY_DIR}/NodeMapLib.rc)
+    set(RC_UIDESIGNER   ${CMAKE_CURRENT_BINARY_DIR}/UiDesignerLib.rc)
+    set(RC_UICOMPONENTS ${CMAKE_CURRENT_BINARY_DIR}/UiComponentsLib.rc)
+    set(RC_MAPPER       ${CMAKE_CURRENT_BINARY_DIR}/MapperLib.rc)
+    set(RC_MIXER        ${CMAKE_CURRENT_BINARY_DIR}/MixerLib.rc)
+    set(RC_MINIAUDIO    ${CMAKE_CURRENT_BINARY_DIR}/MiniaudioLib.rc)
+    set(RC_FFTCONVOLVER ${CMAKE_CURRENT_BINARY_DIR}/FFTConvolverLib.rc)
+    set(RC_VST3HOST     ${CMAKE_CURRENT_BINARY_DIR}/Vst3HostLib.rc)
+elseif(APPLE)
+    set(APP_GUI_TYPE MACOSX_BUNDLE)
+else()
+    set(APP_GUI_TYPE "")
+endif()
+# -----------------------------------------------------------------------------
 
 include(FetchContent)
 FetchContent_Declare(
@@ -16,7 +91,11 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/thestk/rtmidi.git
     GIT_TAG master
 )
-set(RTMIDI_API_WINMM ON CACHE BOOL "Enable WINMM API for RtMidi" FORCE)
+# RtMidi auto-selects CoreMIDI (macOS) / ALSA (Linux) by default; only WINMM
+# needs to be forced on Windows.
+if(WIN32)
+    set(RTMIDI_API_WINMM ON CACHE BOOL "Enable WINMM API for RtMidi" FORCE)
+endif()
 set(RTMIDI_BUILD_SHARED_LIBS ON CACHE BOOL "Build rtmidi as shared library" FORCE)
 set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(RtMidi)
@@ -53,7 +132,13 @@ if(NOT vst3sdk_POPULATED)
     FetchContent_Populate(vst3sdk)
     set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "Build Examples" FORCE)
     set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "Build VST3 Examples" FORCE)
-    set(SMTG_ENABLE_VSTGUI_SUPPORT ON CACHE BOOL "Add VSTGUI" FORCE)
+    # Only the (Windows-only) bundled plugins use VSTGUI; the host does not.
+    # Keeping it off on macOS/Linux avoids pulling X11/Cocoa GUI dependencies.
+    if(WIN32)
+        set(SMTG_ENABLE_VSTGUI_SUPPORT ON CACHE BOOL "Add VSTGUI" FORCE)
+    else()
+        set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "Add VSTGUI" FORCE)
+    endif()
     set(SMTG_BUILD_TESTS OFF CACHE BOOL "Build Tests" FORCE)
     set(SMTG_BUILD_VST3_TESTS OFF CACHE BOOL "Build VST3 Tests" FORCE)
 
@@ -62,6 +147,21 @@ endif()
 
 # Set the SDK root manually
 set(VST3_SDK_ROOT ${vst3sdk_SOURCE_DIR})
+
+# The VST3 module loader + thread checker are platform-specific source files.
+if(WIN32)
+    set(VST3_HOSTING_PLATFORM
+        ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/module_win32.cpp
+        ${VST3_SDK_ROOT}/public.sdk/source/common/threadchecker_win32.cpp)
+elseif(APPLE)
+    set(VST3_HOSTING_PLATFORM
+        ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm
+        ${VST3_SDK_ROOT}/public.sdk/source/common/threadchecker_mac.mm)
+else()
+    set(VST3_HOSTING_PLATFORM
+        ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/module_linux.cpp
+        ${VST3_SDK_ROOT}/public.sdk/source/common/threadchecker_linux.cpp)
+endif()
 
 set(SMTG_ADD_VST3_HOSTING_SAMPLES OFF CACHE BOOL "" FORCE)
 set(SMTG_ADD_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -85,7 +185,7 @@ add_library(SamplerEditorLib STATIC ${LIB_SOURCES})
 target_include_directories(SamplerEditorLib PUBLIC src)
 
 add_library(MiniaudioLib SHARED src/thirdparty/miniaudio/miniaudio.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/MiniaudioLib.rc
+    ${RC_MINIAUDIO}
 )
 add_dependencies(MiniaudioLib UpdateBuildNumber)
 set_target_properties(MiniaudioLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC OFF AUTOUIC OFF)
@@ -97,7 +197,7 @@ add_library(FFTConvolverLib SHARED
     src/thirdparty/FFTConvolver/Utilities.cpp
     src/thirdparty/FFTConvolver/AudioFFT.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/FFTConvolverLib.rc
+    ${RC_FFTCONVOLVER}
 )
 add_dependencies(FFTConvolverLib UpdateBuildNumber)
 set_target_properties(FFTConvolverLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC OFF AUTOUIC OFF)
@@ -105,12 +205,11 @@ target_include_directories(FFTConvolverLib PUBLIC src/thirdparty/FFTConvolver)
 add_library(Vst3HostLib SHARED
     src/audio/Vst3Host.cpp
     ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/module.cpp
-    ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/module_win32.cpp
+    ${VST3_HOSTING_PLATFORM}
     ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/hostclasses.cpp
     ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp
     ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp
     ${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/connectionproxy.cpp
-    ${VST3_SDK_ROOT}/public.sdk/source/common/threadchecker_win32.cpp
     ${VST3_SDK_ROOT}/pluginterfaces/base/funknown.cpp
     ${VST3_SDK_ROOT}/pluginterfaces/base/ustring.cpp
     ${VST3_SDK_ROOT}/pluginterfaces/base/coreiids.cpp
@@ -124,7 +223,7 @@ add_library(Vst3HostLib SHARED
     ${VST3_SDK_ROOT}/public.sdk/source/vst/vstinitiids.cpp
     ${VST3_SDK_ROOT}/public.sdk/source/common/commoniids.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/Vst3HostLib.rc
+    ${RC_VST3HOST}
 )
 add_dependencies(Vst3HostLib UpdateBuildNumber)
 target_include_directories(Vst3HostLib PUBLIC ${VST3_SDK_ROOT})
@@ -132,6 +231,12 @@ set_target_properties(Vst3HostLib PROPERTIES AUTOMOC OFF AUTOUIC OFF WINDOWS_EXP
 target_compile_definitions(Vst3HostLib PRIVATE RELEASE NDEBUG VST3HOST_BUILD)
 target_link_libraries(Vst3HostLib PUBLIC Qt6::Core)
 target_link_libraries(Vst3HostLib PRIVATE pluginterfaces base)
+# module_linux.cpp uses dlopen/dlsym; empty on Windows/macOS.
+target_link_libraries(Vst3HostLib PRIVATE ${CMAKE_DL_LIBS})
+if(APPLE)
+    # module_mac.mm / threadchecker_mac.mm are Objective-C++ using CoreFoundation.
+    target_link_libraries(Vst3HostLib PRIVATE "-framework CoreFoundation" "-framework Foundation")
+endif()
 
 add_library(AudioEngineLib SHARED
     src/audio/AudioEngine.cpp
@@ -144,7 +249,7 @@ add_library(AudioEngineLib SHARED
     src/audio/AudioAnalyzer.cpp
     src/audio/MidiEngine.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/AudioEngineLib.rc
+    ${RC_AUDIOENGINE}
 )
 add_dependencies(AudioEngineLib UpdateBuildNumber)
 set_target_properties(AudioEngineLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON AUTOUIC OFF AUTOMOC_COMPILER_PREDEFINES OFF)
@@ -189,7 +294,7 @@ add_library(CoreLib SHARED
     src/commands/UiCommands.cpp
     src/commands/ZoneCommands.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/CoreLib.rc
+    ${RC_CORE}
 )
 add_dependencies(CoreLib UpdateBuildNumber)
 set_target_properties(CoreLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -212,7 +317,7 @@ add_library(TranspilersLib SHARED
     src/export/BundleExporter.cpp
     src/export/ExportWorker.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/TranspilersLib.rc
+    ${RC_TRANSPILERS}
 )
 add_dependencies(TranspilersLib UpdateBuildNumber)
 set_target_properties(TranspilersLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON AUTOUIC OFF AUTOMOC_COMPILER_PREDEFINES OFF)
@@ -231,7 +336,7 @@ add_library(NodeMapLib SHARED
     src/ui/canvas/GraphNodeItem.cpp
     src/ui/canvas/GraphConnectionItem.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/NodeMapLib.rc
+    ${RC_NODEMAP}
 )
 add_dependencies(NodeMapLib UpdateBuildNumber)
 set_target_properties(NodeMapLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON)
@@ -252,7 +357,7 @@ add_library(UiDesignerLib SHARED
     src/ui/canvas/UiComponentItemFactory.cpp
     src/ui/canvas/UiComponentItems.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/UiDesignerLib.rc
+    ${RC_UIDESIGNER}
 )
 add_dependencies(UiDesignerLib UpdateBuildNumber)
 set_target_properties(UiDesignerLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON)
@@ -280,7 +385,7 @@ add_library(UiComponentsLib SHARED
     src/ui/components/NeumorphicMessageBox.cpp
     src/ui/components/NeumorphicDialog.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/UiComponentsLib.rc
+    ${RC_UICOMPONENTS}
 )
 add_dependencies(UiComponentsLib UpdateBuildNumber)
 set_target_properties(UiComponentsLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON)
@@ -307,7 +412,7 @@ add_library(MapperLib SHARED
     src/ui/mapper/SynthEditorView.cpp
     src/ui/mapper/MacroPanelWidget.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/MapperLib.rc
+    ${RC_MAPPER}
 )
 add_dependencies(MapperLib UpdateBuildNumber)
 set_target_properties(MapperLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON)
@@ -325,7 +430,7 @@ add_library(MixerLib SHARED
     src/ui/mixer/fx_ui/FxKnobWidget.cpp
     src/ui/mixer/fx_ui/FxSwitchWidget.cpp
 
-    ${CMAKE_CURRENT_BINARY_DIR}/MixerLib.rc
+    ${RC_MIXER}
 )
 add_dependencies(MixerLib UpdateBuildNumber)
 set_target_properties(MixerLib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON AUTOMOC ON)
@@ -342,7 +447,6 @@ target_link_libraries(SamplerEditorLib PUBLIC
     miniz
     concurrentqueue
     rtmidi
-    winmm
     Vst3HostLib
     MiniaudioLib
     FFTConvolverLib
@@ -356,7 +460,12 @@ target_link_libraries(SamplerEditorLib PUBLIC
     MixerLib
 )
 
-target_include_directories(SamplerEditorLib PUBLIC 
+# RtMidi's WINMM backend needs winmm on Windows; CoreMIDI/ALSA are pulled by RtMidi elsewhere.
+if(WIN32)
+    target_link_libraries(SamplerEditorLib PUBLIC winmm)
+endif()
+
+target_include_directories(SamplerEditorLib PUBLIC
     src
     ${CMAKE_BINARY_DIR}
     ${CMAKE_BINARY_DIR}/_deps/vst3sdk-src
@@ -402,7 +511,7 @@ set(APP_SOURCES
     src/ui/SettingsDialog.cpp
     src/core/InitWorker.cpp
     src/resources.qrc
-    ${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc
+    ${RC_APP_ICON}
 )
 
 add_custom_target(UpdateBuildNumber
@@ -430,20 +539,24 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/build_version.cpp ${CMAK
     ${CMAKE_CURRENT_BINARY_DIR}/rtmidi.rc ${CMAKE_CURRENT_BINARY_DIR}/miniz.rc
     PROPERTIES GENERATED TRUE)
 
-file(TOUCH ${CMAKE_CURRENT_BINARY_DIR}/rtmidi.rc)
-file(TOUCH ${CMAKE_CURRENT_BINARY_DIR}/miniz.rc)
+# Version-info .rc files are Windows-only.
+if(WIN32)
+    file(TOUCH ${CMAKE_CURRENT_BINARY_DIR}/rtmidi.rc)
+    file(TOUCH ${CMAKE_CURRENT_BINARY_DIR}/miniz.rc)
 
-target_sources(rtmidi PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rtmidi.rc)
-add_dependencies(rtmidi UpdateBuildNumber)
+    target_sources(rtmidi PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rtmidi.rc)
+    add_dependencies(rtmidi UpdateBuildNumber)
 
-target_sources(miniz PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/miniz.rc)
-add_dependencies(miniz UpdateBuildNumber)
+    target_sources(miniz PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/miniz.rc)
+    add_dependencies(miniz UpdateBuildNumber)
+endif()
 
-add_executable(DecentSamplerEditor WIN32 ${APP_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/build_version.cpp)
+add_executable(DecentSamplerEditor ${APP_GUI_TYPE} ${APP_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/build_version.cpp)
 add_dependencies(DecentSamplerEditor UpdateBuildNumber)
 target_link_libraries(DecentSamplerEditor PRIVATE SamplerEditorLib Qt6::Svg Qt6::SvgWidgets)
 
-# --- Copiar DLLs para a pasta do executável ---
+# --- Copy shared libs next to the exe (Windows only; macOS/Linux resolve via rpath) ---
+if(WIN32)
 # 1. Copiar as DLLs (RtMidi, miniz)
 add_custom_command(TARGET DecentSamplerEditor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -535,6 +648,7 @@ add_custom_command(TARGET DecentSamplerEditor POST_BUILD
     "$<TARGET_FILE_DIR:DecentSamplerEditor>"
     COMMENT "Copiando MixerLib.dll para a pasta de build..."
 )
+endif() # WIN32: per-exe DLL copies
 
 # 2. Utilizar windeployqt para copiar as dependências do Qt (e do compilador)
 get_target_property(_qt_bin_dir Qt6::Core LOCATION)
@@ -553,7 +667,11 @@ add_subdirectory(tests)
 add_executable(svg2ico svg2ico.cpp)
 target_link_libraries(svg2ico Qt6::Gui Qt6::Svg)
 
-add_subdirectory(plugins)
+# The bundled VST3 plugins link VSTGUI with Windows-specific libraries; a
+# cross-platform plugin build is future work, so build them on Windows only.
+if(WIN32)
+    add_subdirectory(plugins)
+endif()
 
 # Set output names and prefixes for DLL targets
 set(THIRD_PARTY_DLLS rtmidi miniz MiniaudioLib FFTConvolverLib Vst3HostLib)
@@ -629,10 +747,6 @@ endif()
 if(TARGET MixerLib)
     install(TARGETS MixerLib RUNTIME DESTINATION ".")
 endif()
-
-add_executable(test_loader tests/test_loader.cpp)
-target_link_libraries(test_loader PRIVATE Qt6::Core CoreLib)
-
 
 file(TO_CMAKE_PATH "${CMAKE_PREFIX_PATH}/bin/windeployqt.exe" QT_DEPLOY_CMD)
 

@@ -17,7 +17,11 @@
 #include "commands/UiCommands.h"
 #include "commands/ZoneCommands.h"
 #include "audio/AudioMessage.h"
+#include "audio/AudioEngine.h"
+#include "audio/dsp/VoiceProcessor.h"
 #include <concurrentqueue.h>
+#include <QTemporaryDir>
+#include <QDataStream>
 #include "ui/canvas/FilmstripRenderer.h"
 #include "ui/canvas/UiComponentItem.h"
 #include "ui/waveform/WaveformCache.h"
@@ -40,6 +44,9 @@ private slots:
     
     // AudioEngineTest
     void testLockFreeQueueMessaging();
+    void testAudioMessageDefaults();
+    void testVoiceAdoptLifecycle();
+    void testAudioEngineSourceLifecycle();
     
     // ProjectManagerTest
     void testConnectionValidation();
@@ -93,6 +100,89 @@ void MainTest::testLockFreeQueueMessaging() {
     QVERIFY(result == true);
     QVERIFY(msg.type == AudioCommandType::PlayNote);
     QVERIFY(msg.value == 0.8f);
+}
+
+void MainTest::testAudioMessageDefaults() {
+    // Every message must start with a null prepared source: the audio thread treats a
+    // non-null value as a ready-to-play stream, so a stale/garbage pointer would crash.
+    AudioMessage msg;
+    QVERIFY(msg.preparedSource == nullptr);
+    QVERIFY(msg.isOscillator == false);
+    QCOMPARE(msg.numRoutings, 0);
+}
+
+void MainTest::testVoiceAdoptLifecycle() {
+    VoiceProcessor voice;
+
+    // releaseSource() on a fresh voice (nothing held) must be a safe no-op.
+    voice.releaseSource();
+
+    // adopt() must return the PREVIOUSLY held source so the audio thread can push it to
+    // the free queue instead of leaking it. Sentinel pointers we never dereference/free.
+    auto* a = reinterpret_cast<ma_resource_manager_data_source*>(0x100);
+    auto* b = reinterpret_cast<ma_resource_manager_data_source*>(0x200);
+
+    QVERIFY(voice.adopt(a) == nullptr);        // nothing was held
+    QVERIFY(voice.adopt(b) == a);              // returns the source it was holding
+    QVERIFY(voice.adopt(nullptr) == b);        // returns b and clears the slot
+    QVERIFY(voice.adopt(nullptr) == nullptr);  // slot is now empty
+
+    // Slot left empty on purpose: ~VoiceProcessor() must not uninit a sentinel pointer.
+}
+
+void MainTest::testAudioEngineSourceLifecycle() {
+    AudioEngine engine;
+    if (!engine.initialize(QString(), 44100, 0)) {
+        QSKIP("No audio output device available in this environment.");
+    }
+
+    // Write a small but valid 16-bit mono PCM WAV to a temp directory.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString wavPath = dir.filePath("tone.wav");
+    {
+        QByteArray pcm;
+        {
+            QDataStream ps(&pcm, QIODevice::WriteOnly);
+            ps.setByteOrder(QDataStream::LittleEndian);
+            for (int i = 0; i < 32; ++i) ps << static_cast<qint16>(i * 200);
+        }
+        const quint32 dataSize = static_cast<quint32>(pcm.size());
+        QByteArray wav;
+        QDataStream s(&wav, QIODevice::WriteOnly);
+        s.setByteOrder(QDataStream::LittleEndian);
+        s.writeRawData("RIFF", 4); s << static_cast<quint32>(36 + dataSize); s.writeRawData("WAVE", 4);
+        s.writeRawData("fmt ", 4);
+        s << static_cast<quint32>(16)         // fmt chunk size
+          << static_cast<quint16>(1)          // PCM
+          << static_cast<quint16>(1)          // mono
+          << static_cast<quint32>(44100)      // sample rate
+          << static_cast<quint32>(44100 * 2)  // byte rate
+          << static_cast<quint16>(2)          // block align
+          << static_cast<quint16>(16);        // bits per sample
+        s.writeRawData("data", 4); s << dataSize; s.writeRawData(pcm.constData(), pcm.size());
+        QFile f(wavPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+        f.close();
+    }
+
+    // prepareSampleSource opens a streaming source off the audio thread.
+    void* handle = engine.prepareSampleSource(wavPath.toUtf8().constData());
+    QVERIFY(handle != nullptr);
+
+    // Dispose it through the free-queue path (uninits a real miniaudio source).
+    engine.disposePreparedSource(handle);
+
+    // reinitialize exercises releaseAllVoiceSources() before tearing down the resource
+    // manager — the fix that stops voice sources dangling across a device change.
+    engine.reinitialize(QString(), 44100, 0);
+
+    // Prepare + dispose once more to confirm the engine is still usable after reinit.
+    void* handle2 = engine.prepareSampleSource(wavPath.toUtf8().constData());
+    engine.disposePreparedSource(handle2);
+
+    QVERIFY(true); // reached teardown without crashing; ~AudioEngine disposes the rest
 }
 
 void MainTest::testConnectionValidation() {
@@ -302,15 +392,24 @@ void MainTest::testDecentSamplerTranspiler() {
     z.loVel = 0;
     z.hiVel = 127;
     sg->zones.push_back(z);
+    QString sgId = sg->id.toString(); // capture before the node is moved into the project
     pm.addNode(std::move(sg));
-    
+
     DecentSamplerTranspiler transpiler;
     QString xml = transpiler.generate(&pm, true);
-    QString expectedPath = BundleExporter::getSafeExportName("piano.wav", true);
-    
-    QVERIFY(xml.contains("<DecentSampler pluginVersion=\"1\">"));
-    QVERIFY(xml.contains("<group tags=\"Close\" name=\"Piano_Close\""));
-    QVERIFY(xml.contains(QString("<sample path=\"%1\"").arg(expectedPath)));
+    // Bundle export keeps the original extension (asFlac=false) — matches DsGroupBuilder.
+    QString expectedPath = BundleExporter::getSafeExportName("piano.wav", false);
+
+    // Attribute-order-independent assertions (DsDom serializes attributes alphabetically).
+    // Root carries both the spec-correct minVersion and the legacy pluginVersion.
+    QVERIFY(xml.contains("<DecentSampler"));
+    QVERIFY(xml.contains("pluginVersion=\"1\""));
+    QVERIFY(xml.contains("minVersion=\"1.10.0\""));
+    // Group name gets the mic-layer suffix; the group is tagged by its UUID + mic name
+    // so bindings/modulators can target it.
+    QVERIFY(xml.contains("name=\"Piano_Close\""));
+    QVERIFY(xml.contains(QString("tags=\"%1,Close\"").arg(sgId)));
+    QVERIFY(xml.contains(QString("path=\"%1\"").arg(expectedPath)));
 }
 
 void MainTest::testSfzTranspiler() {

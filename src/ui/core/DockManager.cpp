@@ -14,7 +14,7 @@
 #include "../editor/ModulatorsView.h"
 #include "../editor/MacrosView.h"
 #include "../../commands/ModifyPropertyCommand.h"
-#include "../../core/commands/ModifyZonePropertyCommand.h"
+#include "commands/ModifyZonePropertyCommand.h"
 #include "../../commands/UiCommands.h"
 #include "../sequencer/NoteSequenceEditorView.h"
 #include <QDockWidget>
@@ -119,14 +119,27 @@ void DockManager::setupDocks() {
     QVBoxLayout* centralLayout = new QVBoxLayout(m_centralContainer);
     centralLayout->setContentsMargins(0, 0, 0, 0);
     centralLayout->setSpacing(0);
-    
-    centralLayout->addWidget(m_mainTabs);
-    
+
     m_editorPanel = new QWidget();
     m_editorPanel->setObjectName("EditorPanel");
     QVBoxLayout* editorLayout = new QVBoxLayout(m_editorPanel);
     editorLayout->setContentsMargins(0, 0, 0, 0);
     editorLayout->setSpacing(0);
+    // Small explicit minimum so the splitter can drag the dock below its content's
+    // natural height (the Group Settings min would otherwise block shrinking).
+    m_editorPanel->setMinimumHeight(40);
+
+    // Main editor (top) and the bottom dock share a draggable vertical splitter so
+    // the dock no longer clips the center content at a fixed height.
+    m_centralSplitter = new QSplitter(Qt::Vertical, m_centralContainer);
+    m_centralSplitter->setObjectName("CentralSplitter");
+    m_centralSplitter->setChildrenCollapsible(false);
+    m_centralSplitter->setHandleWidth(5);
+    m_centralSplitter->addWidget(m_mainTabs);
+    m_centralSplitter->addWidget(m_editorPanel);
+    m_centralSplitter->setStretchFactor(0, 1); // top absorbs window resizes
+    m_centralSplitter->setStretchFactor(1, 0); // bottom dock keeps its size
+    centralLayout->addWidget(m_centralSplitter);
     
     QPushButton* collapseHandle = new QPushButton();
     collapseHandle->setObjectName("EditorCollapseHandle");
@@ -189,7 +202,13 @@ void DockManager::setupDocks() {
             if (QTabBar* tabBar = m_editorTabs->findChild<QTabBar*>()) {
                 collapsedHeight = tabBar->sizeHint().height();
             }
-            m_editorPanel->setFixedHeight(collapsedHeight);
+            // Cap the dock to the tab bar AND move the splitter handle: the cap lets the
+            // dock shrink, and setSizes reclaims the freed region for the editor above
+            // (a cap alone leaves the handle in place, so the freed area shows as a void).
+            m_editorPanel->setMinimumHeight(collapsedHeight);
+            m_editorPanel->setMaximumHeight(collapsedHeight);
+            int total = m_centralSplitter->height();
+            m_centralSplitter->setSizes({ qMax(50, total - collapsedHeight), collapsedHeight });
         } else {
             m_sampleEditorContainer->show();
             m_groupEditorView->show();
@@ -200,8 +219,12 @@ void DockManager::setupDocks() {
             
             collapseHandle->setFixedHeight(16);
             m_collapseBtn->show();
-            
-            m_editorPanel->setFixedHeight(320);
+
+            // Release the cap so the splitter can freely resize the dock again.
+            m_editorPanel->setMaximumHeight(QWIDGETSIZE_MAX);
+            m_editorPanel->setMinimumHeight(40);
+            int total = m_centralSplitter->height();
+            m_centralSplitter->setSizes({ qMax(100, total - 320), 320 });
         }
     };
     
@@ -210,7 +233,9 @@ void DockManager::setupDocks() {
     
     connect(m_focusBtn, &QPushButton::clicked, this, [this, editorLayout]() {
         if (!m_focusOverlay) {
-            m_focusBtn->setText("⤢ Exit Focus Mode");
+            // The overlay carries m_editorTabs (and this corner button) fullscreen and
+            // provides its own top-right "Exit Focus Mode"; hide ours to avoid a duplicate.
+            m_focusBtn->hide();
             if (m_groupEditorView) {
                 m_groupEditorView->setFocusMode(true);
             }
@@ -220,7 +245,7 @@ void DockManager::setupDocks() {
                     m_groupEditorView->setFocusMode(false);
                 }
                 editorLayout->addWidget(m_editorTabs);
-                m_focusBtn->setText("⤢ Focus Mode");
+                m_focusBtn->show();
                 m_focusOverlay = nullptr;
             });
         } else {
@@ -241,15 +266,14 @@ void DockManager::setupDocks() {
     
     m_editorTabs->addTab(m_groupEditorView, "Group Settings");
     m_editorTabs->addTab(m_sampleEditorContainer, "Sample Editor");
-    m_editorTabs->addTab(m_mixerView, "Mixer & FX");
+    m_editorTabs->addTab(m_mixerView, "Mixer && FX"); // && renders a literal '&' (single & is a mnemonic)
     m_editorTabs->addTab(m_modulatorsView, "Modulators");
     m_editorTabs->addTab(m_macrosView, "Macros");
     m_editorTabs->addTab(m_sequencerView, "Sequencer");
     
     editorLayout->addWidget(m_editorTabs);
-    
-    centralLayout->addWidget(m_editorPanel);
-    m_editorPanel->setFixedHeight(320);
+
+    m_centralSplitter->setSizes({700, 320}); // initial: main editor / bottom dock
     
     connect(m_mappingContainer, &MappingEditorContainer::groupSelected, this, [this](const QUuid& sgId){
         m_inspector->setNode(sgId);
