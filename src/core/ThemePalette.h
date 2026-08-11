@@ -2,12 +2,7 @@
 #include <QString>
 #include <QColor>
 #include <QHash>
-
-#ifdef CORELIB_BUILD
-#define CORELIB_EXPORT __declspec(dllexport)
-#else
-#define CORELIB_EXPORT __declspec(dllimport)
-#endif
+#include "CoreLibExport.h"  // portable CORELIB_EXPORT (Q_DECL_EXPORT/IMPORT)
 
 class CORELIB_EXPORT ThemePalette {
 public:

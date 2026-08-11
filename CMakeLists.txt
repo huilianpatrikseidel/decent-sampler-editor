@@ -692,6 +692,7 @@ set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/Deploy" CACHE PATH "Instal
 
 install(TARGETS DecentSamplerEditor
     RUNTIME DESTINATION "."
+    BUNDLE DESTINATION "."   # required for the macOS MACOSX_BUNDLE executable
 )
 
 # Install rtmidi DLL if built as shared

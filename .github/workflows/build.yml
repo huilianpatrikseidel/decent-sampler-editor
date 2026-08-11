@@ -29,8 +29,9 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        version: '6.11.1'
-        # Qt Svg/SvgWidgets ship with the base Qt 6 install — no separate module.
+        # 6.8 LTS is reliably mirrored on all platforms via aqt (6.11.x was missing
+        # from the Windows mirror). Svg/SvgWidgets ship with the base Qt 6 install.
+        version: '6.8.1'
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
