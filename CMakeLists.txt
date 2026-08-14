@@ -664,9 +664,6 @@ endif()
 
 add_subdirectory(tests)
 
-add_executable(svg2ico svg2ico.cpp)
-target_link_libraries(svg2ico Qt6::Gui Qt6::Svg)
-
 # The bundled VST3 plugins link VSTGUI with Windows-specific libraries; a
 # cross-platform plugin build is future work, so build them on Windows only.
 if(WIN32)

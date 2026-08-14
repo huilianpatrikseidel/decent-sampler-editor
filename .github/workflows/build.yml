@@ -10,6 +10,9 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Linux is the required gate. Windows (MSVC vs the project's MinGW toolchain) and
+    # macOS are run for visibility but are non-blocking work-in-progress for now.
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
     strategy:
       # Report every platform independently instead of cancelling the others.
       fail-fast: false
