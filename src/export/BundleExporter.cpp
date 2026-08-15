@@ -1,4 +1,5 @@
 #include "BundleExporter.h"
+#include "FlacEncoder.h"
 #include "transpilers/DecentSamplerTranspiler.h"
 #include "transpilers/SfzTranspiler.h"
 #include <miniz.h>
@@ -12,6 +13,7 @@
 #include <QCryptographicHash>
 // UI rasterization has been moved to a callback to decouple from the GUI layer
 #include <QBuffer>
+#include <cstring> // memset — pulled in transitively by GCC, not guaranteed by MSVC
 
 BundleExporter::BackgroundRasterizer s_rasterizer = nullptr;
 
@@ -28,6 +30,10 @@ QString BundleExporter::getSafeExportName(const QString& originalPath, bool asFl
     return info.completeBaseName() + "_" + hash + "." + ext;
 }
 
+QString BundleExporter::getBundleSampleName(const QString& originalPath) {
+    return getSafeExportName(originalPath, FlacEncoder::canEncode(originalPath));
+}
+
 bool BundleExporter::exportToDecentSampler(const ProjectManager* pm, const QString& outputPath, QString& errorMsg) {
     // Create zip archive
     mz_zip_archive zip_archive;
@@ -40,6 +46,8 @@ bool BundleExporter::exportToDecentSampler(const ProjectManager* pm, const QStri
     
     QSet<QString> allSamplePaths;
     QSet<QString> allFilmstripPaths;
+    // Kept apart from allSamplePaths: wavetables are stored as-is, never FLAC-encoded.
+    QSet<QString> allWavetablePaths;
     
     int numPresets = pm->getPresetManager()->getPresetCount();
     for (int i = 0; i < numPresets; ++i) {
@@ -88,6 +96,12 @@ bool BundleExporter::exportToDecentSampler(const ProjectManager* pm, const QStri
                 for (const Zone& z : sg->zones) {
                     allSamplePaths.insert(z.samplePath);
                 }
+                // Wavetable oscillators reference a file the zone sweep above never sees,
+                // so without this the preset points at a name the bundle does not contain.
+                if (sg->isOscillator && sg->oscParams.waveform == "wavetable"
+                    && !sg->oscParams.wavetableFile.isEmpty()) {
+                    allWavetablePaths.insert(sg->oscParams.wavetableFile);
+                }
             }
         }
         
@@ -103,25 +117,61 @@ bool BundleExporter::exportToDecentSampler(const ProjectManager* pm, const QStri
         }
     }
     
-    // Add audio files (Direct copy, no FLAC transcoding to avoid libsndfile dependency)
+    // Add audio files. Integer PCM WAVs are re-encoded to FLAC — losslessly, and roughly
+    // half the size — while anything else (float WAV, already-compressed formats) is
+    // stored byte-for-byte so nothing is ever degraded on the way into the bundle.
     for (const QString& path : allSamplePaths) {
-        QFile file(path);
-        if (file.open(QIODevice::ReadOnly)) {
-            QString safeName = getSafeExportName(path, false);
-            QByteArray data = file.readAll();
-            if (!mz_zip_writer_add_mem(&zip_archive, safeName.toUtf8().constData(), 
-                                        data.constData(), data.size(), MZ_DEFAULT_COMPRESSION)) {
-                errorMsg = "Failed to add audio file " + safeName + " to bundle.";
+        const QString safeName = getBundleSampleName(path);
+        QByteArray data;
+
+        if (FlacEncoder::canEncode(path)) {
+            // The preset XML already points at the .flac name, so a failure here cannot
+            // be papered over by storing the WAV — it has to stop the export.
+            if (!FlacEncoder::encodeFile(path, data)) {
+                errorMsg = "Failed to encode audio file " + path + " as FLAC.";
                 mz_zip_writer_end(&zip_archive);
                 return false;
             }
         } else {
-            errorMsg = "Error: Could not read audio file " + path;
+            QFile file(path);
+            if (!file.open(QIODevice::ReadOnly)) {
+                errorMsg = "Error: Could not read audio file " + path;
+                mz_zip_writer_end(&zip_archive);
+                return false;
+            }
+            data = file.readAll();
+        }
+
+        // FLAC is already compressed; deflating it again only costs export time.
+        const mz_uint level = safeName.endsWith(".flac") ? MZ_NO_COMPRESSION : MZ_DEFAULT_COMPRESSION;
+        if (!mz_zip_writer_add_mem(&zip_archive, safeName.toUtf8().constData(),
+                                    data.constData(), data.size(), level)) {
+            errorMsg = "Failed to add audio file " + safeName + " to bundle.";
             mz_zip_writer_end(&zip_archive);
             return false;
         }
     }
     
+    // Add wavetables. These stay in their original format on purpose: the transpiler
+    // names them with getSafeExportName(path, false), and Decent Sampler is not confirmed
+    // to read FLAC wavetables, so encoding them would risk a preset that no longer loads.
+    for (const QString& path : allWavetablePaths) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            errorMsg = "Error: Could not read wavetable file " + path;
+            mz_zip_writer_end(&zip_archive);
+            return false;
+        }
+        const QString safeName = getSafeExportName(path, false);
+        const QByteArray data = file.readAll();
+        if (!mz_zip_writer_add_mem(&zip_archive, safeName.toUtf8().constData(),
+                                   data.constData(), data.size(), MZ_DEFAULT_COMPRESSION)) {
+            errorMsg = "Failed to add wavetable file " + safeName + " to bundle.";
+            mz_zip_writer_end(&zip_archive);
+            return false;
+        }
+    }
+
     // Add UI Filmstrips
     for (const QString& path : allFilmstripPaths) {
         QFile file(path);

@@ -76,7 +76,13 @@ private:
     
     LfoOscillator m_lfo1;
     LfoOscillator m_lfo2;
-    
+
+    // One-pole smoothed MIDI controllers. The raw values arrive in coarse 7-bit steps
+    // from the MIDI thread, which would zipper if fed straight into pitch or gain.
+    float m_smoothedModWheel = 0.0f;
+    float m_smoothedPitchBend = 0.0f;
+    float m_smoothedAftertouch = 0.0f;
+
 
 
     static void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);

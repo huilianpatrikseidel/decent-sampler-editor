@@ -11,6 +11,18 @@ struct RenderRouting {
     float amount = 0.0f;
 };
 
+// Modulation sources that are global to the engine rather than per-voice. The engine
+// produces these once per frame and hands the same values to every active voice, so a
+// note triggered mid-gesture starts from the current controller position instead of
+// ramping up to it.
+struct ModInputs {
+    float lfo1 = 0.0f;
+    float lfo2 = 0.0f;
+    float modWheel = 0.0f;    // CC 1, 0..1
+    float pitchBend = 0.0f;   // -1..1, 0 = centred
+    float aftertouch = 0.0f;  // channel/poly pressure, 0..1
+};
+
 enum class AudioCommandType {
     PlayNote,
     StopNote,

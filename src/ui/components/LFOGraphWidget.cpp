@@ -7,6 +7,14 @@
 #include <QMouseEvent>
 #include "../../core/ThemePalette.h"
 
+// MSVC does not expose M_PI from <cmath> without _USE_MATH_DEFINES, which has to be
+// defined before the first include of it anywhere in the translation unit. Defining the
+// constant directly is order-independent and works on every compiler.
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+
 LFOGraphWidget::LFOGraphWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("NeumorphicInner");
     setAttribute(Qt::WA_StyledBackground, true);

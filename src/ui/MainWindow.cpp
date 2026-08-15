@@ -105,20 +105,22 @@ void MainWindow::setupUi() {
     m_tabs->setMinimumSize(100, 100);
     
     m_libraryView = new LibraryView(m_controller, m_tabs);
-    m_tabs->addTab(m_libraryView, "1. Libraries");
+    // Plain labels rather than "1. …": the tabs are freely navigable in any order, so
+    // numbering promised a wizard flow the app does not actually enforce.
+    m_tabs->addTab(m_libraryView, "Libraries");
     connect(m_libraryView, &LibraryView::requestTabChange, m_tabs, &QTabWidget::setCurrentIndex);
     
     m_mappingContainer = new MappingEditorContainer(m_controller->getProjectManager(), m_tabs);
-    m_tabs->addTab(m_mappingContainer, "2. Sampling");
+    m_tabs->addTab(m_mappingContainer, "Sampling");
     
     m_nodeMap = new NodeMapView(m_controller, m_tabs);
-    m_tabs->addTab(m_nodeMap, "3. Node Map");
+    m_tabs->addTab(m_nodeMap, "Node Map");
     
     m_uiDesigner = new UIDesignerView(m_controller->getProjectManager(), m_tabs);
-    m_tabs->addTab(m_uiDesigner, "4. UI Designer");
+    m_tabs->addTab(m_uiDesigner, "UI Designer");
     
     m_codeEditor = new CodeEditorView(m_controller->getProjectManager(), m_tabs);
-    m_tabs->addTab(m_codeEditor, "5. Code Editor");
+    m_tabs->addTab(m_codeEditor, "Code Editor");
     
     // Connect Visual Keyboards to Audio Engine
     connect(m_mappingContainer, &MappingEditorContainer::notePressed, m_controller, &ApplicationController::playNote);

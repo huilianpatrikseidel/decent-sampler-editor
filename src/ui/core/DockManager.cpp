@@ -21,6 +21,7 @@
 #include <QSplitter>
 #include <QFileInfo>
 #include <QGraphicsScene>
+#include <QScrollArea>
 #include <QTabWidget>
 #include <QTimer>
 #include "PresetListWidget.h"
@@ -264,12 +265,25 @@ void DockManager::setupDocks() {
         });
     }
     
-    m_editorTabs->addTab(m_groupEditorView, "Group Settings");
+    // The splitter can drag this dock down to 40px, so a view with a tall fixed layout
+    // would simply clip. Group Settings and Sequencer have no scrolling of their own and
+    // get one here; the other four already scroll internally, and wrapping those too
+    // would nest a second scrollbar inside the first.
+    auto scrollable = [](QWidget* view) -> QWidget* {
+        QScrollArea* area = new QScrollArea();
+        area->setWidgetResizable(true);
+        area->setFrameShape(QFrame::NoFrame);
+        area->setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { border: none; background: transparent; }");
+        area->setWidget(view);
+        return area;
+    };
+
+    m_editorTabs->addTab(scrollable(m_groupEditorView), "Group Settings");
     m_editorTabs->addTab(m_sampleEditorContainer, "Sample Editor");
     m_editorTabs->addTab(m_mixerView, "Mixer && FX"); // && renders a literal '&' (single & is a mnemonic)
     m_editorTabs->addTab(m_modulatorsView, "Modulators");
     m_editorTabs->addTab(m_macrosView, "Macros");
-    m_editorTabs->addTab(m_sequencerView, "Sequencer");
+    m_editorTabs->addTab(scrollable(m_sequencerView), "Sequencer");
     
     editorLayout->addWidget(m_editorTabs);
 

@@ -326,17 +326,33 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
     std::fill(m_dryL.begin(), m_dryL.begin() + frameCount, 0.0f);
     std::fill(m_dryR.begin(), m_dryR.begin() + frameCount, 0.0f);
 
+    // Latest MIDI controller positions, sampled once per buffer. The per-frame one-pole
+    // below turns their 7-bit steps into a continuous ramp.
+    const float modWheelTarget = m_audioState.modWheel.load(std::memory_order_relaxed);
+    const float pitchBendTarget = m_audioState.pitchBend.load(std::memory_order_relaxed);
+    const float aftertouchTarget = m_audioState.aftertouch.load(std::memory_order_relaxed);
+    constexpr float kCtrlSmoothing = 0.005f; // same coefficient as the per-voice volume ramp
+
+    ModInputs mods;
+
     for (int frame = 0; frame < frameCount; ++frame) {
         float mixL = 0.0f;
         float mixR = 0.0f;
-        
-        float lfo1Val = m_lfo1.process();
-        float lfo2Val = m_lfo2.process();
-        
+
+        m_smoothedModWheel += kCtrlSmoothing * (modWheelTarget - m_smoothedModWheel);
+        m_smoothedPitchBend += kCtrlSmoothing * (pitchBendTarget - m_smoothedPitchBend);
+        m_smoothedAftertouch += kCtrlSmoothing * (aftertouchTarget - m_smoothedAftertouch);
+
+        mods.lfo1 = m_lfo1.process();
+        mods.lfo2 = m_lfo2.process();
+        mods.modWheel = m_smoothedModWheel;
+        mods.pitchBend = m_smoothedPitchBend;
+        mods.aftertouch = m_smoothedAftertouch;
+
         for (int i = 0; i < MAX_VOICES; ++i) {
             if (m_voices[i].isActive()) {
                 float vL = 0.0f, vR = 0.0f;
-                m_voices[i].process(lfo1Val, lfo2Val, vL, vR, &m_audioState);
+                m_voices[i].process(mods, vL, vR, &m_audioState);
                 mixL += vL;
                 mixR += vR;
             }

@@ -12,9 +12,15 @@ Os motores de compilação (Build Targets) lerão o modelo em memória JSON e co
 - Responsável por exportar o layout WYSIWYG do Canvas para a tag `<ui>`.
 - **O Empacotador `.dsbundle` (Deploy Inteligente)**:
   - Processa uma varredura de todos os `.wav` utilizados.
-  - Converte-os em segundo plano para `.flac` (via libflac) para compactação otimizada sem perdas de áudio.
-  - Agrupa os FLACs, as imagens sprites (`multiFrameImage`) e o `.dspreset`.
+  - Converte-os para `.flac` sem perdas, usando o encoder próprio em `src/export/FlacEncoder`
+    (preditores fixos + codificação Rice + decorrelação estéreo — sem dependência externa).
+  - Apenas PCM inteiro de 8/16/24 bits é convertido. WAVs em float, 32 bits ou formatos que
+    o encoder não reproduz bit a bit são gravados no bundle sem alteração, mantendo a
+    garantia de que nada é degradado. O `.dspreset` e o zip decidem o nome pela mesma
+    função (`BundleExporter::getBundleSampleName`), então a extensão sempre bate.
+  - Agrupa os samples, as imagens sprites (`multiFrameImage`) e o `.dspreset`.
   - Zipa tudo usando algoritmos de compressão nativos de C++, alterando a extensão para `.dsbundle`.
+    Entradas `.flac` entram armazenadas (sem deflate), já que recomprimi-las só custaria tempo.
 
 ### 2.2. Transpiler SFZ
 - Lê o mesmo modelo JSON e converte em texto (opcodes).

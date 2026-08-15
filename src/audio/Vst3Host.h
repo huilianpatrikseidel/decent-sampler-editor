@@ -31,6 +31,12 @@ public:
     Vst3Host();
     virtual ~Vst3Host();
 
+    // Owns the module and the raw Steinberg interface pointers, which the destructor
+    // releases. The implicit copy ops would be well-formed and double-release them, so
+    // delete them explicitly.
+    Vst3Host(const Vst3Host&) = delete;
+    Vst3Host& operator=(const Vst3Host&) = delete;
+
     // IPlugFrame implementation
     Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView* view, Steinberg::ViewRect* newSize) override;
     

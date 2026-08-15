@@ -120,7 +120,8 @@ void GroupEditorView::rebuildForm() {
     connect(triggerCombo, &QComboBox::currentTextChanged, [this, sg, pm](const QString& text) {
         if (!m_isUpdatingUI) pm->getUndoStack()->push(new ModifyPropertyCommand(pm, m_currentSgId, "trigger", sg->trigger, text));
     });
-    settingsLayout->addRow(labelWithTooltip("Trigger Event", "When the group begins playback."), triggerCombo);
+    // "Trigger" matches both the inspector and the .dspreset attribute of the same name.
+    settingsLayout->addRow(labelWithTooltip("Trigger", "When the group begins playback."), triggerCombo);
     
     QComboBox* seqModeCombo = new QComboBox();
     seqModeCombo->addItems({"normal", "round_robin", "random", "true_random"});
@@ -261,7 +262,9 @@ void GroupEditorView::rebuildForm() {
         QWidget* controlsBlock = new QWidget();
         controlsBlock->setObjectName("NeumorphicControls");
         controlsBlock->setAttribute(Qt::WA_StyledBackground, true);
-        controlsBlock->setFixedHeight(85);
+        // Hug the knob column instead of pinning 85px: the label + knob + readout stack
+        // already overflowed that, which is what clipped the value text.
+        controlsBlock->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         QHBoxLayout* knobsLayout = new QHBoxLayout(controlsBlock);
         knobsLayout->setContentsMargins(0, 10, 0, 10);
         knobsLayout->setSpacing(16);
@@ -279,7 +282,7 @@ void GroupEditorView::rebuildForm() {
             kl->addWidget(nl, 0, Qt::AlignCenter);
 
             SynthKnobWidget* knob = new SynthKnobWidget();
-            knob->setFixedSize(36, 36);
+            knob->setFixedSize(44, 44); // 36 was an uncomfortably small drag target
             knob->setMinimum(min);
             knob->setMaximum(max);
             double def = (label == "Sustain") ? 1.0 : 0.0;
@@ -289,7 +292,7 @@ void GroupEditorView::rebuildForm() {
             kl->addWidget(knob, 0, Qt::AlignCenter);
 
             QLabel* valueLabel = new QLabel(QString::number(value, 'f', 2));
-            valueLabel->setStyleSheet("font-size: 10px; font-family: Consolas, monospace;");
+            valueLabel->setStyleSheet("font-size: 11px; font-family: Consolas, monospace;");
             valueLabel->setAlignment(Qt::AlignCenter);
             kl->addWidget(valueLabel, 0, Qt::AlignCenter);
 

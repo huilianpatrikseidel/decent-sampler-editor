@@ -197,6 +197,7 @@ QPushButton#SettingsApplyBtn:pressed { background-color: @qss_color_3; color: @q
 #LibraryProjectGrid { background-color: transparent; border: none; }
 #LibraryProjectGrid::item { background-color: @qss_color_22; border-radius: 6px; padding: 10px; border: 1px solid @qss_color_9; }
 #LibraryProjectGrid::item:selected { background-color: @qss_color_15; border: 1px solid @qss_color_6; }
+#LibraryEmptyState { color: @qss_color_17; font-size: 14px; background: transparent; }
 
 /* Code Editor */
 #CodeEditorToolbar { background-color: @qss_color_10; border-bottom: 1px solid @qss_color_9; }

@@ -28,9 +28,15 @@
 #include "transpilers/DecentSamplerTranspiler.h"
 #include "transpilers/SfzTranspiler.h"
 #include "export/BundleExporter.h"
+#include "export/FlacEncoder.h"
 #include "core/ProjectSerializer.h"
 #include <QSignalSpy>
+#include <miniz.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <memory>
+#include <vector>
 
 class MainTest : public QObject {
     Q_OBJECT
@@ -46,6 +52,7 @@ private slots:
     void testLockFreeQueueMessaging();
     void testAudioMessageDefaults();
     void testVoiceAdoptLifecycle();
+    void testMidiModulationSources();
     void testAudioEngineSourceLifecycle();
     
     // ProjectManagerTest
@@ -61,7 +68,107 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // ExportTest
+    void testFlacEncoderRoundTrip();
+    void testFlacEncoderRejectsFloatWav();
+    void testBundleIncludesWavetable();
 };
+
+namespace {
+
+// Builds a RIFF/WAVE file around `samples`, which are signed and right-aligned to `bits`.
+// 8-bit WAV data is unsigned on disk, so it is biased on the way out.
+QByteArray buildWav(const std::vector<qint32>& samples, int channels, int sampleRate,
+                    int bits, quint16 formatTag = 1) {
+    const int bytesPerSample = bits / 8;
+    QByteArray pcm;
+    pcm.reserve(static_cast<int>(samples.size()) * bytesPerSample);
+    for (qint32 sample : samples) {
+        const quint32 v = (bits == 8) ? static_cast<quint32>(sample + 128)
+                                      : static_cast<quint32>(sample);
+        for (int b = 0; b < bytesPerSample; ++b) {
+            pcm.append(static_cast<char>((v >> (8 * b)) & 0xFF));
+        }
+    }
+
+    const quint32 dataSize = static_cast<quint32>(pcm.size());
+    QByteArray wav;
+    QDataStream s(&wav, QIODevice::WriteOnly);
+    s.setByteOrder(QDataStream::LittleEndian);
+    s.writeRawData("RIFF", 4); s << static_cast<quint32>(36 + dataSize); s.writeRawData("WAVE", 4);
+    s.writeRawData("fmt ", 4);
+    s << static_cast<quint32>(16)
+      << formatTag
+      << static_cast<quint16>(channels)
+      << static_cast<quint32>(sampleRate)
+      << static_cast<quint32>(sampleRate * channels * bytesPerSample)
+      << static_cast<quint16>(channels * bytesPerSample)
+      << static_cast<quint16>(bits);
+    s.writeRawData("data", 4); s << dataSize; s.writeRawData(pcm.constData(), pcm.size());
+    return wav;
+}
+
+// A signal built to hit every subframe path: a silent run (CONSTANT), a smooth tone
+// (fixed predictors pay off), and white noise (they do not, so VERBATIM takes over).
+std::vector<qint32> buildTestSignal(int frames, int channels, int bits) {
+    const qint32 peak = (1 << (bits - 1)) - 1;
+    std::vector<qint32> out(static_cast<size_t>(frames) * channels);
+    quint32 rng = 12345u;
+    for (int i = 0; i < frames; ++i) {
+        rng = rng * 1664525u + 1013904223u;
+        qint32 base;
+        if (i < frames / 4) {
+            base = 0;
+        } else if (i < frames / 2) {
+            const double t = static_cast<double>(i) / 44100.0;
+            base = static_cast<qint32>(std::sin(2.0 * 3.14159265358979323846 * 220.0 * t) * peak * 0.9);
+        } else {
+            base = static_cast<qint32>(rng >> 8) % (peak + 1);
+            if ((rng & 1u) != 0) base = -base;
+        }
+        for (int c = 0; c < channels; ++c) {
+            // Channel 1 tracks channel 0 loosely, so stereo decorrelation has something to find.
+            const qint32 v = (c == 0) ? base : base / 2 + 7;
+            out[static_cast<size_t>(i) * channels + c] = std::clamp(v, -peak - 1, peak);
+        }
+    }
+    return out;
+}
+
+// Decodes a FLAC stream back to signed samples right-aligned to `bits`.
+bool decodeFlac(const QByteArray& flac, int bits, int channels, std::vector<qint32>& out) {
+    ma_decoder_config config = ma_decoder_config_init(ma_format_s32, 0, 0);
+    ma_decoder decoder;
+    if (ma_decoder_init_memory(flac.constData(), static_cast<size_t>(flac.size()),
+                               &config, &decoder) != MA_SUCCESS) {
+        return false;
+    }
+    if (static_cast<int>(decoder.outputChannels) != channels) {
+        ma_decoder_uninit(&decoder);
+        return false;
+    }
+
+    ma_uint64 total = 0;
+    ma_decoder_get_length_in_pcm_frames(&decoder, &total);
+    out.resize(static_cast<size_t>(total) * channels);
+
+    ma_uint64 done = 0;
+    while (done < total) {
+        ma_uint64 read = 0;
+        ma_decoder_read_pcm_frames(&decoder, out.data() + done * channels, total - done, &read);
+        if (read == 0) break;
+        done += read;
+    }
+    ma_decoder_uninit(&decoder);
+
+    out.resize(static_cast<size_t>(done) * channels);
+    const int shift = 32 - bits;
+    for (qint32& v : out) v >>= shift;
+    return done == total && total > 0;
+}
+
+} // namespace
 
 void MainTest::testNodeCreationAndUUID() {
     auto group = std::make_unique<SampleGroup>();
@@ -128,6 +235,55 @@ void MainTest::testVoiceAdoptLifecycle() {
     QVERIFY(voice.adopt(nullptr) == nullptr);  // slot is now empty
 
     // Slot left empty on purpose: ~VoiceProcessor() must not uninit a sentinel pointer.
+}
+
+void MainTest::testMidiModulationSources() {
+    // ModWheel / PitchBend / Aftertouch used to fall through the mod-source switch and
+    // contribute nothing at all. Render an oscillator voice with each one routed to
+    // Volume at full negative depth: at source 0 the voice sounds, at source 1 it is
+    // fully attenuated. Anything that does not reach the switch leaves both equal.
+    auto renderPeak = [](ModSource source, float sourceValue) {
+        AudioMessage msg;
+        msg.note = 69;
+        msg.velocity = 127;
+        msg.volume = 1.0f;
+        msg.sustain = 1.0f;
+        msg.isOscillator = true;
+        msg.oscWaveform = 0; // sine
+        msg.numRoutings = 1;
+        msg.routings[0].source = source;
+        msg.routings[0].dest = ModDest::Volume;
+        msg.routings[0].amount = -1.0f;
+
+        VoiceProcessor voice;
+        voice.setSampleRate(44100.0);
+        voice.trigger(msg, msg.note);
+
+        ModInputs mods;
+        switch (source) {
+            case ModSource::ModWheel: mods.modWheel = sourceValue; break;
+            case ModSource::PitchBend: mods.pitchBend = sourceValue; break;
+            case ModSource::Aftertouch: mods.aftertouch = sourceValue; break;
+            default: break;
+        }
+
+        float peak = 0.0f;
+        for (int i = 0; i < 2048; ++i) {
+            float l = 0.0f, r = 0.0f;
+            voice.process(mods, l, r, nullptr);
+            peak = std::max(peak, std::abs(l));
+        }
+        return peak;
+    };
+
+    const ModSource sources[] = { ModSource::ModWheel, ModSource::PitchBend, ModSource::Aftertouch };
+    for (ModSource source : sources) {
+        const float idle = renderPeak(source, 0.0f);
+        const float driven = renderPeak(source, 1.0f);
+
+        QVERIFY2(idle > 0.01f, "oscillator voice produced no signal at all");
+        QVERIFY2(driven < idle * 0.01f, "mod source did not reach the voice");
+    }
 }
 
 void MainTest::testAudioEngineSourceLifecycle() {
@@ -431,6 +587,127 @@ void MainTest::testSfzTranspiler() {
     QVERIFY(sfz.contains("<region>"));
     QVERIFY(sfz.contains("sample=bass.wav"));
     QVERIFY(sfz.contains("lokey=30 hikey=34"));
+}
+
+void MainTest::testFlacEncoderRoundTrip() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    struct Case { int bits; int channels; int frames; const char* name; };
+    // 5000 frames spans two 4096-sample blocks, so the short trailing block is covered too.
+    const Case cases[] = {
+        { 16, 2, 5000, "stereo16.wav" },
+        { 24, 1, 4096, "mono24.wav" },
+        {  8, 1, 1000, "mono8.wav"   },
+    };
+
+    for (const Case& c : cases) {
+        const std::vector<qint32> original = buildTestSignal(c.frames, c.channels, c.bits);
+        const QByteArray wav = buildWav(original, c.channels, 44100, c.bits);
+
+        const QString wavPath = dir.filePath(QString::fromLatin1(c.name));
+        {
+            QFile f(wavPath);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+        }
+
+        QVERIFY2(FlacEncoder::canEncode(wavPath), c.name);
+
+        QByteArray flac;
+        QVERIFY2(FlacEncoder::encodeFile(wavPath, flac), c.name);
+        QVERIFY2(flac.startsWith("fLaC"), c.name);
+
+        // The whole point of the feature: the bundle entry must be smaller than the WAV.
+        QVERIFY2(flac.size() < wav.size(), c.name);
+
+        // And lossless: every sample must survive the round trip untouched.
+        std::vector<qint32> decoded;
+        QVERIFY2(decodeFlac(flac, c.bits, c.channels, decoded), c.name);
+        QCOMPARE(decoded.size(), original.size());
+        for (size_t i = 0; i < original.size(); ++i) {
+            if (decoded[i] != original[i]) {
+                QFAIL(qPrintable(QString("%1: sample %2 changed: %3 -> %4")
+                                 .arg(c.name).arg(i).arg(original[i]).arg(decoded[i])));
+            }
+        }
+
+        // The bundle name follows from the same decision the transpiler makes.
+        QVERIFY(BundleExporter::getBundleSampleName(wavPath).endsWith(".flac"));
+    }
+}
+
+void MainTest::testFlacEncoderRejectsFloatWav() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // WAVE_FORMAT_IEEE_FLOAT cannot be encoded losslessly here, so it must be refused and
+    // stored as-is rather than silently truncated to an integer depth.
+    const QString floatPath = dir.filePath("float32.wav");
+    {
+        QByteArray wav = buildWav(std::vector<qint32>(256, 0), 1, 44100, 32, /*formatTag=*/3);
+        QFile f(floatPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+    }
+
+    QVERIFY(!FlacEncoder::canEncode(floatPath));
+    QVERIFY(BundleExporter::getBundleSampleName(floatPath).endsWith(".wav"));
+
+    // A path that is not a WAV at all must also be left alone.
+    QVERIFY(!FlacEncoder::canEncode(dir.filePath("missing.wav")));
+    QVERIFY(!FlacEncoder::canEncode(dir.filePath("sample.ogg")));
+}
+
+void MainTest::testBundleIncludesWavetable() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // A real WAV, so the exporter has something to actually read and store.
+    const QString wavetablePath = dir.filePath("table.wav");
+    {
+        const QByteArray wav = buildWav(buildTestSignal(512, 1, 16), 1, 44100, 16);
+        QFile f(wavetablePath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+    }
+
+    ProjectManager pm;
+    pm.createNewProject("WavetableBundle");
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Osc";
+    sg->isOscillator = true;
+    sg->oscParams.waveform = "wavetable";
+    sg->oscParams.wavetableFile = wavetablePath;
+    pm.addNode(std::move(sg));
+
+    pm.getPresetManager()->addPreset("Main");
+
+    const QString bundlePath = dir.filePath("out.dslibrary");
+    QString error;
+    QVERIFY2(BundleExporter::exportToDecentSampler(&pm, bundlePath, error), qPrintable(error));
+
+    // The transpiler writes the wavetable under this name; the archive must contain it.
+    const QString expected = BundleExporter::getSafeExportName(wavetablePath, false);
+
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    QVERIFY(mz_zip_reader_init_file(&zip, bundlePath.toUtf8().constData(), 0));
+
+    QStringList entries;
+    const mz_uint count = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < count; ++i) {
+        mz_zip_archive_file_stat stat;
+        if (mz_zip_reader_file_stat(&zip, i, &stat)) {
+            entries << QString::fromUtf8(stat.m_filename);
+        }
+    }
+    mz_zip_reader_end(&zip);
+
+    QVERIFY2(entries.contains(expected),
+             qPrintable(QString("wavetable '%1' missing from bundle; entries: %2")
+                        .arg(expected, entries.join(", "))));
 }
 
 QTEST_MAIN(MainTest)

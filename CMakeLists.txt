@@ -316,6 +316,7 @@ add_library(TranspilersLib SHARED
     src/transpilers/SfzTranspiler.cpp
     src/export/BundleExporter.cpp
     src/export/ExportWorker.cpp
+    src/export/FlacEncoder.cpp
 
     ${RC_TRANSPILERS}
 )
@@ -328,6 +329,7 @@ target_link_libraries(TranspilersLib PUBLIC
     Qt6::Widgets
     miniz
     CoreLib
+    MiniaudioLib  # FlacEncoder decodes the source WAVs through miniaudio
 )
 
 add_library(NodeMapLib SHARED

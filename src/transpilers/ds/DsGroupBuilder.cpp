@@ -131,7 +131,7 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                     } else {
                         node = groupNode->addChild("sample");
                         QString exportPath = z.samplePath;
-                        if (isBundle) exportPath = BundleExporter::getSafeExportName(z.samplePath, false);
+                        if (isBundle) exportPath = BundleExporter::getBundleSampleName(z.samplePath);
                         node->setAttribute("path", exportPath);
                         if (z.sampleStart > 0) node->setAttribute("start", z.sampleStart);
                         if (z.sampleEnd > 0) node->setAttribute("end", z.sampleEnd);
