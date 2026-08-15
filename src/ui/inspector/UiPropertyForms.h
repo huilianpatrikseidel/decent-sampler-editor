@@ -3,7 +3,7 @@
 #include <functional>
 #include <map>
 
-class UiComponent;
+struct UiComponent;
 class PropertiesInspector;
 class QFormLayout;
 

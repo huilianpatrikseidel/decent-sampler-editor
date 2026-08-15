@@ -315,7 +315,6 @@ add_library(TranspilersLib SHARED
     src/transpilers/ds/DsUiBuilder.cpp
     src/transpilers/SfzTranspiler.cpp
     src/export/BundleExporter.cpp
-    src/export/ExportWorker.cpp
     src/export/FlacEncoder.cpp
 
     ${RC_TRANSPILERS}
@@ -497,6 +496,10 @@ set(APP_SOURCES
     src/ui/editor/MacrosView.h
     src/ui/editor/MacrosView.cpp
     src/ui/waveform/WaveformEditorView.cpp
+    # Only MenuManager uses this, and it is a QObject: leaving it in the shared
+    # TranspilersLib would export staticMetaObject across a DLL boundary, which MSVC does
+    # not do automatically (data symbols are exempt from WINDOWS_EXPORT_ALL_SYMBOLS).
+    src/export/ExportWorker.cpp
     src/ui/inspector/PropertiesInspector.cpp
     src/ui/inspector/strategies/NodeInspectorStrategy.cpp
     src/ui/inspector/strategies/UiComponentInspectorStrategy.cpp

@@ -8,7 +8,7 @@
 #include "ui/mixer/MixerLibExport.h"
 class ProjectManager;
 class ApplicationController;
-class Node;
+struct Node;
 
 class MIXERLIB_EXPORT EffectEditorDialog : public NeumorphicDialog {
     Q_OBJECT

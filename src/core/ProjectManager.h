@@ -15,8 +15,8 @@
 #include "models/GraphStructures.h"
 #include "models/ProjectStates.h"
 
-class Node;
-class UiComponent;
+struct Node;
+struct UiComponent;
 class INodeVisitor;
 
 #include "CoreLibExport.h"

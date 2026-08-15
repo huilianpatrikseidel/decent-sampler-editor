@@ -1,18 +1,18 @@
 #pragma once
 
-class UiKnob;
-class UiSlider;
-class UiButton;
-class UiLabel;
-class UiShape;
-class UiImage;
-class UiMenu;
-class UiXYPad;
-class UiOscilloscope;
-class UiKeyboard;
-class UiTab;
-class UiLine;
-class UiMultiFrameImage;
+struct UiKnob;
+struct UiSlider;
+struct UiButton;
+struct UiLabel;
+struct UiShape;
+struct UiImage;
+struct UiMenu;
+struct UiXYPad;
+struct UiOscilloscope;
+struct UiKeyboard;
+struct UiTab;
+struct UiLine;
+struct UiMultiFrameImage;
 
 class IUiVisitor {
 public:

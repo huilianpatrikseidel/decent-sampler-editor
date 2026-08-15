@@ -2,7 +2,7 @@
 #include "IInspectorStrategy.h"
 #include <QUuid>
 
-class UiComponent;
+struct UiComponent;
 
 class UiComponentInspectorStrategy : public IInspectorStrategy {
 public:

@@ -4,7 +4,7 @@
 
 
 #include "ui/mapper/MapperLibExport.h"
-class SampleGroup;
+struct SampleGroup;
 class SynthKnobWidget;
 class QPushButton;
 class ProjectManager;
