@@ -113,7 +113,7 @@
 | **UX nits** | Envelope knobs 36px → 44px, value readout 10px → 11px, "Trigger Event" → "Trigger" to match the inspector and the `.dspreset` attribute, and the main tabs dropped their `1.`–`5.` prefixes (they are freely navigable, so the numbering promised a wizard flow that does not exist). |
 | **Wavetable bundling** | Wavetable oscillators referenced a file the zone sweep never collected, so the preset pointed at a missing entry. Collected into a set of its own and stored unencoded, since the transpiler names it with `getSafeExportName(path, false)` and Decent Sampler is not confirmed to read FLAC wavetables. `testBundleIncludesWavetable` opens the produced zip and asserts the entry exists; it was confirmed to fail without the fix. |
 | **MSVC hardening** | `M_PI` guarded in the three files that used it with only `<cmath>` (`Oscillator`/`StateVariableFilter` already had the guard), and explicit `<cstring>` where `memset`/`strncpy` were arriving only transitively. Static audit found no VLAs, `__attribute__`, alternative tokens, or `windows.h` min/max clashes. |
-| **Docs** | The three stale audit reports moved to `docs/archive/` behind a README explaining they are superseded. |
+| **Docs** | The three stale audit reports moved to `docs/04-planning/history/` behind a README explaining they are superseded. |
 
 ---
 
