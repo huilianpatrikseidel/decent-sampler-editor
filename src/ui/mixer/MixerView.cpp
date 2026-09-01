@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QScrollArea>
+#include "core/DecibelUtils.h"
 #include <QFrame>
 #include <QSet>
 #include "../../core/ProjectManager.h"
@@ -43,7 +44,10 @@ MixerView::MixerView(ApplicationController* appCtrl, QWidget *parent)
     connect(m_masterStrip, &MixerChannelStrip::masterVolumeChanged, this, [this](double val) {
         AudioMessage msg;
         msg.type = AudioCommandType::SetMasterVolume;
-        msg.volume = static_cast<float>(val);
+        // The engine reads SetMasterVolume out of `value`, not `volume` -- writing the
+        // wrong field left masterVolume at the message default of 0, so touching the
+        // master fader silenced everything. The fader reports dB; the engine wants linear.
+        msg.value = DecibelUtils::dbToLinear(val);
         m_appCtrl->getAudioEngine()->pushCommand(msg);
     });
     

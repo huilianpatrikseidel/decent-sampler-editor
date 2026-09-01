@@ -75,21 +75,21 @@ MixerChannelStrip::MixerChannelStrip(ApplicationController* appCtrl, const QUuid
         }
     });
     
-    connect(m_volumeFader, &FaderWidget::valueChanged, this, [this](double value){
+    connect(m_volumeFader, &FaderWidget::valueChanged, this, [this](double valueDb){
         if (m_updating) return;
         Node* n = m_pm->getNode(m_sgId);
         if (n && n->type == "SampleGroup") {
             SampleGroup* sg = static_cast<SampleGroup*>(n);
-            if (sg->volume != value) {
-                m_pm->getUndoStack()->push(new ModifyPropertyCommand(m_pm, m_sgId, "volume", sg->volume, value));
+            if (sg->volume != valueDb) {
+                m_pm->getUndoStack()->push(new ModifyPropertyCommand(m_pm, m_sgId, "volume", sg->volume, valueDb));
             }
         } else if (n && n->type == "Bus") {
             BusNode* b = static_cast<BusNode*>(n);
-            if (b->volume != value) {
-                m_pm->getUndoStack()->push(new ModifyPropertyCommand(m_pm, m_sgId, "volume", b->volume, value));
+            if (b->volume != valueDb) {
+                m_pm->getUndoStack()->push(new ModifyPropertyCommand(m_pm, m_sgId, "volume", b->volume, valueDb));
             }
         } else if (m_sgId.isNull()) {
-            emit masterVolumeChanged(value);
+            emit masterVolumeChanged(valueDb);
         }
     });
     
@@ -129,7 +129,7 @@ void MixerChannelStrip::updateFromNode() {
     m_updating = true;
     
     if (m_sgId.isNull()) {
-        m_volumeFader->setValue(100);
+        m_volumeFader->setValueDb(0.0);
         m_panDial->setValue(0);
         
         m_nameLabel->setText("Master");
@@ -139,7 +139,7 @@ void MixerChannelStrip::updateFromNode() {
         if (n) {
             if (n->type == "SampleGroup") {
                 SampleGroup* sg = static_cast<SampleGroup*>(n);
-                m_volumeFader->setValue(sg->volume);
+                m_volumeFader->setValueDb(sg->volume);
                 m_panDial->setValue(sg->pan);
                 
                 if (sg->pan == 0) m_panValueLabel->setText("C");
@@ -154,7 +154,7 @@ void MixerChannelStrip::updateFromNode() {
                 m_nameLabel->setToolTip(name);
             } else if (n->type == "Bus") {
                 BusNode* bus = static_cast<BusNode*>(n);
-                m_volumeFader->setValue(bus->volume);
+                m_volumeFader->setValueDb(bus->volume);
                 m_panDial->setValue(0); 
                 m_panValueLabel->setText("C");
                 m_btnMute->setChecked(bus->muted);

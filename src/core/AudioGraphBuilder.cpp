@@ -1,4 +1,5 @@
 #include "AudioGraphBuilder.h"
+#include "DecibelUtils.h"
 
 std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, AudioEngine* audioEngine) {
     std::vector<RenderZone> newZones;
@@ -14,7 +15,9 @@ std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, 
                 rz.decay = sg->ampEnv.decay;
                 rz.sustain = sg->ampEnv.sustain;
                 rz.release = sg->ampEnv.release;
-                rz.volume = sg->volume;
+                // sg->volume is decibels; the voice multiplies this straight into
+                // its output, so it has to be linear by the time it gets there.
+                rz.volume = DecibelUtils::dbToLinear(sg->volume);
                 
                 rz.modAttack = sg->modEnv.attack;
                 rz.modDecay = sg->modEnv.decay;
@@ -27,7 +30,7 @@ std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, 
                 
                 rz.paramBlockIndex = audioEngine->getAudioState()->getOrAllocateBlock(sg->id);
                 if (rz.paramBlockIndex != -1) {
-                    audioEngine->getAudioState()->nodeParams[rz.paramBlockIndex].volume.store(sg->volume, std::memory_order_relaxed);
+                    audioEngine->getAudioState()->nodeParams[rz.paramBlockIndex].volume.store(DecibelUtils::dbToLinear(sg->volume), std::memory_order_relaxed);
                     // Add other continuous parameters here (cutoff, resonance, etc.)
                 }
                 

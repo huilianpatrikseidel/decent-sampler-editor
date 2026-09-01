@@ -3,6 +3,18 @@
 #include "../../export/BundleExporter.h"
 #include "../../core/INodeVisitor.h"
 
+namespace {
+// Volumes are decibels in the model. Decent Sampler only reads them that way when the
+// value carries a "dB" suffix -- a bare number is a linear 0..1 multiplier there, so
+// emitting the raw dB figure would turn a 0 dB (unity) group into total silence.
+// Matches how the global volume is already written in DecentSamplerTranspiler.
+void setVolumeDb(DsNode* node, double db) {
+    if (db == 0.0) return; // 0 dB is unity; leave the attribute out entirely
+    node->setAttribute("volume", QString::number(db) + "dB");
+}
+} // namespace
+
+
 void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, bool isBundle) {
     class GroupsVisitor : public INodeVisitor {
         DsNode* rootGroups;
@@ -74,7 +86,7 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                 if (!combinedTags.isEmpty()) groupNode->setAttribute("tags", combinedTags.join(","));
                 
                 groupNode->setAttribute("name", groupName);
-                groupNode->setAttribute("volume", effVolume);
+                setVolumeDb(groupNode, effVolume);
                 groupNode->setAttribute("pan", effPan);
                 groupNode->setAttribute("tuning", effTuning);
                 groupNode->setAttribute("attack", sg->ampEnv.attack);
@@ -150,7 +162,7 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                     node->setAttribute("hiVel", z.hiVel);
                     node->setAttribute("seqPosition", z.seqPosition);
                     node->setAttribute("tuning", z.tuning);
-                    node->setAttribute("volume", z.volume);
+                    setVolumeDb(node, z.volume);
                     node->setAttribute("pan", z.pan);
                     if (z.keySwitchNote != -1) node->setAttribute("keySwitch", z.keySwitchNote);
                     

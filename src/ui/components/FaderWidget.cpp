@@ -1,11 +1,13 @@
 #include "FaderWidget.h"
+#include "core/DecibelUtils.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QDir>
 #include <QCoreApplication>
 
 FaderWidget::FaderWidget(bool isMaster, QWidget* parent)
-    : QWidget(parent), m_value(1.0), m_defaultValue(1.0), m_dragging(false), m_capHeight(30)
+    : QWidget(parent), m_position(kUnityPosition), m_defaultPosition(kUnityPosition),
+      m_dragging(false), m_capHeight(30)
 {
     setFixedSize(30, 200);
     setCursor(Qt::SizeVerCursor);
@@ -18,19 +20,48 @@ FaderWidget::FaderWidget(bool isMaster, QWidget* parent)
     }
 }
 
-void FaderWidget::setValue(double val) {
-    if (val < 0.0) val = 0.0;
-    if (val > 1.0) val = 1.0;
-    if (m_value != val) {
-        m_value = val;
-        emit valueChanged(m_value);
+// Piecewise taper: the bottom 80% of the travel covers kFloorDb..0 dB, the top 20%
+// covers 0..kMaxDb, and the very bottom snaps to silence. Linear-in-dB over each segment
+// keeps the useful range readable instead of crowding everything near unity.
+double FaderWidget::positionToDb(double pos) {
+    if (pos <= 0.0) return DecibelUtils::kSilenceDb;
+    if (pos >= kUnityPosition) {
+        return (pos - kUnityPosition) / (1.0 - kUnityPosition) * kMaxDb;
+    }
+    return kFloorDb * (1.0 - pos / kUnityPosition);
+}
+
+double FaderWidget::dbToPosition(double db) {
+    if (db <= DecibelUtils::kSilenceDb) return 0.0;
+    if (db >= 0.0) {
+        const double pos = kUnityPosition + (db / kMaxDb) * (1.0 - kUnityPosition);
+        return pos > 1.0 ? 1.0 : pos;
+    }
+    const double pos = kUnityPosition * (1.0 - db / kFloorDb);
+    return pos < 0.0 ? 0.0 : pos;
+}
+
+double FaderWidget::valueDb() const {
+    return positionToDb(m_position);
+}
+
+void FaderWidget::setValueDb(double db) {
+    setPosition(dbToPosition(db));
+}
+
+void FaderWidget::setPosition(double pos) {
+    if (pos < 0.0) pos = 0.0;
+    if (pos > 1.0) pos = 1.0;
+    if (m_position != pos) {
+        m_position = pos;
+        emit valueChanged(valueDb());
         update();
     }
 }
 
 int FaderWidget::valueToY() const {
     // value 1.0 = top, 0.0 = bottom
-    return trackTopMargin() + static_cast<int>((1.0 - m_value) * trackLength());
+    return trackTopMargin() + static_cast<int>((1.0 - m_position) * trackLength());
 }
 
 void FaderWidget::updateValueFromY(int y) {
@@ -39,8 +70,8 @@ void FaderWidget::updateValueFromY(int y) {
     if (y < top) y = top;
     if (y > bottom) y = bottom;
     
-    double normalized = 1.0 - static_cast<double>(y - top) / trackLength();
-    setValue(normalized);
+    const double normalized = 1.0 - static_cast<double>(y - top) / trackLength();
+    setPosition(normalized);
 }
 
 void FaderWidget::paintEvent(QPaintEvent* /*event*/) {
@@ -79,7 +110,7 @@ void FaderWidget::mouseMoveEvent(QMouseEvent* event) {
             step *= 0.1; // Fine adjustment
         }
         
-        setValue(m_value + step);
+        setPosition(m_position + step);
         event->accept();
     }
 }
@@ -93,17 +124,17 @@ void FaderWidget::mouseReleaseEvent(QMouseEvent* event) {
 
 void FaderWidget::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        setValue(m_defaultValue);
+        setPosition(m_defaultPosition);
         event->accept();
     }
 }
 
 void FaderWidget::wheelEvent(QWheelEvent* event) {
-    double step = 0.05;
+    const double step = 0.05;
     if (event->angleDelta().y() > 0) {
-        setValue(m_value + step);
+        setPosition(m_position + step);
     } else {
-        setValue(m_value - step);
+        setPosition(m_position - step);
     }
     event->accept();
 }

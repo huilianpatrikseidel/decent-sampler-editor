@@ -29,6 +29,8 @@
 #include "transpilers/SfzTranspiler.h"
 #include "export/BundleExporter.h"
 #include "export/FlacEncoder.h"
+#include "core/DecibelUtils.h"
+#include "ui/components/FaderWidget.h"
 #include "core/ProjectSerializer.h"
 #include <QSignalSpy>
 #include <miniz.h>
@@ -68,6 +70,10 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // VolumeTest
+    void testDecibelConversion();
+    void testGroupVolumeExportedAsDecibels();
 
     // ExportTest
     void testFlacEncoderRoundTrip();
@@ -708,6 +714,60 @@ void MainTest::testBundleIncludesWavetable() {
     QVERIFY2(entries.contains(expected),
              qPrintable(QString("wavetable '%1' missing from bundle; entries: %2")
                         .arg(expected, entries.join(", "))));
+}
+
+
+void MainTest::testDecibelConversion() {
+    // 0 dB is unity. The whole model stores volumes in dB and defaults them to 0.0, so
+    // getting this backwards renders every channel silent.
+    QVERIFY(qFuzzyCompare(DecibelUtils::dbToLinear(0.0) + 1.0f, 2.0f));
+    QVERIFY(DecibelUtils::dbToLinear(-6.0) < 0.51f);
+    QVERIFY(DecibelUtils::dbToLinear(-6.0) > 0.49f);
+    QVERIFY(DecibelUtils::dbToLinear(6.0) > 1.99f);
+    QCOMPARE(DecibelUtils::dbToLinear(-96.0), 0.0f);
+    QCOMPARE(DecibelUtils::dbToLinear(-200.0), 0.0f);
+
+    // The fader speaks dB and must round-trip the values a user actually lands on.
+    FaderWidget fader;
+    for (double db : { 0.0, -6.0, 6.0, -30.0 }) {
+        fader.setValueDb(db);
+        QVERIFY2(std::abs(fader.valueDb() - db) < 0.5,
+                 qPrintable(QString("fader lost %1 dB (got %2)").arg(db).arg(fader.valueDb())));
+    }
+    // A fader at unity must be exactly 0 dB, not merely close to it.
+    fader.setValueDb(0.0);
+    QVERIFY(std::abs(fader.valueDb()) < 1e-9);
+}
+
+void MainTest::testGroupVolumeExportedAsDecibels() {
+    ProjectManager pm;
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Quiet";
+    sg->volume = -6.0; // decibels
+    Zone z;
+    z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    pm.addNode(std::move(sg));
+
+    auto loud = std::make_unique<SampleGroup>();
+    loud->name = "Unity";
+    loud->volume = 0.0; // 0 dB
+    Zone z2;
+    z2.samplePath = "b.wav";
+    loud->zones.push_back(z2);
+    pm.addNode(std::move(loud));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // A bare number means a linear 0..1 multiplier to Decent Sampler, so -6 would be a
+    // 6x boost and 0 would be total silence. The suffix is what makes it decibels.
+    QVERIFY2(xml.contains("volume=\"-6dB\""), qPrintable(xml));
+    QVERIFY2(!xml.contains("volume=\"-6\""), qPrintable(xml));
+
+    // 0 dB is unity, so the attribute is left out rather than written as a literal 0.
+    QVERIFY2(!xml.contains("volume=\"0\""), qPrintable(xml));
 }
 
 QTEST_MAIN(MainTest)
