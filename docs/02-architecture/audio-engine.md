@@ -28,17 +28,31 @@ precisely because they own these resources.
 
 ## Render path
 
-Per buffer: drain the command queue, then for each frame compute the shared modulation
-sources, run every active voice, and sum. The mixed buffer then passes through the
-master VST3 chain and is clipped to the output.
+Per buffer:
 
-The VST chain is swapped without locking: `setMasterEffectsAsync` publishes a new vector
-into an atomic and disposes the old one after a delay. (That delay is timing-based rather
-than proven — recorded in [../04-planning/technical-debt.md](../04-planning/technical-debt.md).)
+1. Drain the command queue.
+2. Per frame, compute the shared modulation sources and run every active voice, summing
+   each voice into **its own channel's buffer**. A voice whose channel index is -1 — no
+   channel, or one dropped past `MAX_CHANNELS` — lands on master instead, so its audio is
+   never lost.
+3. Walk the channels **front to back**, applying each one's insert chain and gain, then
+   summing it into its destination channel. The ordering guarantees a channel is always
+   rendered before whatever it feeds, so one pass suffices.
+4. Apply master gain, then the master chain, then clip to the output.
 
-> Per-channel and per-bus rendering is planned but not yet implemented; only the master
-> chain is applied today. See
-> [../04-planning/per-bus-fx-plan.md](../04-planning/per-bus-fx-plan.md).
+The graph is a `MixGraph` — per-channel chains, gains and destination indices — built on
+the UI thread by `VstPluginManager` and published into an atomic by `setMixGraphAsync`,
+so the callback never walks the project model. A null graph means every voice goes to
+master, which is the state before a project loads.
+
+Channel indices come from `MixerTopology`, which both `VstPluginManager` and
+`AudioGraphBuilder` call. They must agree on what an index means; deriving it
+independently would route voices through the wrong chain.
+
+Buffers for all `MAX_CHANNELS` channels are allocated in `initialize`. The old
+buffers are swapped without locking, and the delay before disposing them is timing-based
+rather than proven — recorded in
+[../04-planning/technical-debt.md](../04-planning/technical-debt.md).
 
 ## Modulation
 

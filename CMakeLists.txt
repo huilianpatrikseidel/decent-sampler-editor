@@ -282,6 +282,7 @@ add_library(CoreLib SHARED
     src/core/AutoMapper.cpp
     src/core/DsDom.cpp
     src/core/ApplicationController.cpp
+    src/core/MixerTopology.cpp
     src/core/AudioGraphBuilder.cpp
     src/core/VstPluginManager.cpp
     src/core/DatabaseManager.cpp

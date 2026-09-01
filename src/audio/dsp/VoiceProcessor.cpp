@@ -58,6 +58,7 @@ void VoiceProcessor::trigger(const AudioMessage& msg, int rootNote) {
     m_rootNote = rootNote;
     m_groupId = msg.groupId;
     m_paramBlockIndex = msg.paramBlockIndex;
+    m_channelIndex = msg.channelIndex;
     float velNorm = msg.velocity / 127.0f;
     m_volume = msg.volume * velNorm;
     m_smoothedVolume = 1.0f;

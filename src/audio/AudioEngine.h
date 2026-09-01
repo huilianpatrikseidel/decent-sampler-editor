@@ -23,6 +23,21 @@
 
 #include <QString>
 
+// One mixer channel as the audio thread sees it. Built on the UI thread and published
+// whole, so the callback never walks the project model.
+struct MixChannel {
+    std::vector<Vst3Host*> effects; // insert chain, in order
+    float gain = 1.0f;              // linear; groups already applied theirs per voice
+    int destination = -1;           // index of the channel this feeds, or -1 for master
+};
+
+// Channels in processing order: every channel appears before the one it feeds, so the
+// callback can render the vector front to back in a single pass.
+struct MixGraph {
+    std::vector<MixChannel> channels;
+    std::vector<Vst3Host*> masterEffects;
+};
+
 struct AudioDeviceInfo {
     QString id;
     QString name;
@@ -50,6 +65,14 @@ public:
     void disposePreparedSource(void* handle);
 
     void setMasterEffectsAsync(std::vector<Vst3Host*>* newEffects);
+
+    // Publishes a whole mixer graph. Takes ownership; the previous one is disposed off
+    // the audio thread, same as the master chain.
+    void setMixGraphAsync(MixGraph* newGraph);
+
+    // Upper bound on mixer channels, and therefore on the pre-allocated buffers. Channels
+    // past this are not given an index and route straight to master.
+    static const int MAX_CHANNELS = 64;
     
     GlobalAudioState* getAudioState() { return &m_audioState; }
 
@@ -94,12 +117,17 @@ private:
     void releaseAllVoiceSources();    // dispose every voice's source; device must be stopped
 
     std::atomic<std::vector<Vst3Host*>*> m_activeVstEffects{nullptr};
+    std::atomic<MixGraph*> m_activeMixGraph{nullptr};
 
     QString m_currentDeviceName;
     int m_currentSampleRate = 44100;
     
     std::vector<float> m_dryL;
     std::vector<float> m_dryR;
+    // Per-channel accumulation buffers, sized once in initialize(). Indexed by the
+    // channel index MixerTopology assigned.
+    std::vector<std::vector<float>> m_chanL;
+    std::vector<std::vector<float>> m_chanR;
     std::vector<float> m_vstOutL;
     std::vector<float> m_vstOutR;
 };

@@ -3,6 +3,8 @@
 #include <QJsonObject>
 #include <QTimer>
 #include <QDebug>
+#include "MixerTopology.h"
+#include "audio/AudioEngine.h"
 
 VstPluginManager::VstPluginManager(ProjectManager* pm, AudioEngine* audioEngine, QObject* parent)
     : QObject(parent), m_pm(pm), m_audioEngine(audioEngine) {
@@ -89,12 +91,39 @@ void VstPluginManager::updateMasterEffects() {
             newFx->push_back(newHosts[fxId].get());
         }
     }
+
+    // 3. Assemble the per-channel graph. The topology comes from the same builder
+    // AudioGraphBuilder uses, so a channel index means the same thing on both sides --
+    // deriving it independently here would route voices through the wrong chain.
+    const MixerTopology topology = MixerTopology::build(m_pm, AudioEngine::MAX_CHANNELS);
+    auto* newGraph = new MixGraph();
+    newGraph->channels.resize(topology.channelCount());
+    newGraph->masterEffects = *newFx;
+
+    for (int i = 0; i < topology.channelCount(); ++i) {
+        const QUuid& channelId = topology.order[i];
+        MixChannel& channel = newGraph->channels[i];
+        channel.gain = topology.gain[i];
+        channel.destination = topology.destination[i];
+
+        QVector<QUuid> inserts;
+        if (Node* n = m_pm->getNode(channelId)) {
+            if (n->type == "SampleGroup") inserts = static_cast<SampleGroup*>(n)->insertEffects;
+            else if (n->type == "Bus") inserts = static_cast<BusNode*>(n)->insertEffects;
+        }
+        for (const QUuid& fxId : inserts) {
+            if (newHosts.contains(fxId)) {
+                channel.effects.push_back(newHosts[fxId].get());
+            }
+        }
+    }
     
     // Preserve old hosts until audio engine completes swap
     auto oldHosts = m_vstHosts;
     m_vstHosts = newHosts;
     
     m_audioEngine->setMasterEffectsAsync(newFx);
+    m_audioEngine->setMixGraphAsync(newGraph);
     
     // Safely delete old hosts after 100ms
     QTimer::singleShot(100, [oldHosts]() {

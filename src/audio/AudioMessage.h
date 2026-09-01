@@ -40,6 +40,7 @@ struct AudioMessage {
     // Polyphony Data
     int note = 60;
     int paramBlockIndex = -1; // Index in GlobalAudioState
+    int channelIndex = -1;    // Mixer channel; -1 means straight to master
     
     // Sample Playback
     int velocity = 100;

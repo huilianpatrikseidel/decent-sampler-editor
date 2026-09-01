@@ -38,6 +38,7 @@ public:
     void process(const ModInputs& mods, float& outL, float& outR, GlobalAudioState* state);
 
     bool isActive() const { return m_active; }
+    int getChannelIndex() const { return m_channelIndex; }
     int getPlayingNote() const { return m_playingNote; }
     QUuid getGroupId() const { return m_groupId; }
     bool isReleasing() const { return m_adsr.getState() == AdsrEnvelope::Release; }
@@ -67,6 +68,7 @@ private:
     float m_volume;
     float m_smoothedVolume;
     int m_paramBlockIndex = -1;
+    int m_channelIndex = -1;
     QUuid m_groupId;
     
     // Modulation Routingamento

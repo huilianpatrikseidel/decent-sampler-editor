@@ -48,16 +48,34 @@ limit rather than a regression.
 
 ---
 
-## The test suite cannot name a failing case
+## The test suite reports as a single ctest case
 
-The whole QtTest binary is one `ctest` entry, and it is a GUI-subsystem executable whose
-stdout is discarded. When the Windows CI job hung, the responsible test could not be
-identified from the logs at all.
+The whole QtTest binary is one `ctest` entry, so a failure or hang is attributed to the
+suite rather than to a case.
 
-*Why:* it has been adequate while Linux was the only green platform.
+Its output is recoverable, though: QtTest writes a report when asked, which works even
+though the binary's console output is otherwise unavailable.
 
-*Resolution:* register each test slot as its own `add_test`, and set `timeout-minutes`
-on the CI job so a hang fails in minutes instead of hours.
+```bash
+QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe [testName] -o out.txt,txt
+```
+
+*Resolution:* register each test slot as its own `add_test`, and set `timeout-minutes` on
+the CI job so a hang fails in minutes rather than hours. Until then, the command above is
+how to find out which case failed.
+
+---
+
+## The audio callback can still allocate on an oversized buffer
+
+`AudioEngine::processAudio` resizes its buffers if the host asks for more frames than
+`initialize` sized for. That allocates on the audio thread, which the rules forbid.
+
+*Why:* the alternative is indexing past the end of a channel buffer, which is a crash.
+The buffers are sized for at least 8192 frames — around 170 ms — so it has never been
+observed to fire.
+
+*Resolution:* clamp and render in chunks instead of resizing.
 
 ---
 

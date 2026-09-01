@@ -105,10 +105,15 @@ MinGW and fails on MSVC with `LNK2019`. Forward declarations must match the defi
 
 ### The test suite reports as a single case
 
-All of QtTest runs under **one** `ctest` entry, and the binary is a GUI-subsystem
-executable whose stdout is discarded. A hanging or failing case therefore cannot be
-identified from CI logs today. To prove a new test actually runs, invert its assertion
-and confirm the suite turns red.
+All of QtTest runs under **one** `ctest` entry, so a failure is attributed to the suite
+rather than to a case. Piping the binary's stdout yields nothing, but QtTest will write a
+report to a file, and that works:
+
+```bash
+QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe [testName] -o out.txt,txt
+```
+
+To prove a new test actually runs, invert its assertion and confirm the suite turns red.
 
 ---
 

@@ -21,9 +21,16 @@ Two things the harness cannot do, both of which have already cost real time:
 **It cannot tell you which case failed.** Everything runs under one `ctest` entry, so a
 failure or a hang is reported against the suite as a whole.
 
-**Its output is discarded.** The test binary is a GUI-subsystem executable with no
-console, so QtTest's per-case output never reaches the CI log. When the Windows job hung,
-the responsible test could not be identified at all.
+**Its console output does not survive.** Piping the binary's stdout yields nothing, which
+is why the Windows CI hang could not be attributed to a case. QtTest will write a report
+to a file, though, and that does work:
+
+```bash
+QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe -o out.txt,txt
+```
+
+Pass a slot name before `-o` to run a single case. This is the way to find out which case
+failed or hung.
 
 Resolution is tracked in [../04-planning/technical-debt.md](../04-planning/technical-debt.md).
 

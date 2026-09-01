@@ -160,6 +160,7 @@ void ApplicationController::playNote(int midiNote, int velocity) {
                 msg.glideTime = z.glideTime;
                 msg.groupId = z.groupId;
                 msg.paramBlockIndex = z.paramBlockIndex;
+                msg.channelIndex = z.channelIndex;
                 
                 msg.hasFilter = z.hasFilter;
                 msg.filterCutoff = z.filterCutoff;

@@ -80,7 +80,7 @@ check, so an illegal route cannot be selected in the first place.
 Covered by `testBusRoutingPersists` and `testBusRoutingRejectsCycles`; the cycle test was
 confirmed to fail with the guard removed.
 
-## Stage 4 — per-channel audition
+## Stage 4 — per-channel audition — **done**
 
 - New `MixerTopology` in `CoreLib`: enumerates channels, resolves destinations, orders
   them topologically. **The single source of channel indices** — `AudioGraphBuilder` and
@@ -96,8 +96,12 @@ confirmed to fail with the guard removed.
   still apply.
 - Unmapped channels route straight to master rather than disappearing.
 
-*Verify:* a unit test builds group → bus → master with known gains and asserts the
-composed amplitude; then a reverb on a bus is audible in the running application.
+Covered by `testTopologyOrdersSourcesBeforeDestinations` and `testTopologyGainAndOverflow`;
+the ordering test was confirmed to fail with the sort inverted.
+
+> **To confirm** — that a reverb placed on a bus is actually audible while auditioning.
+> The render path is in place and the application runs, but this has not been confirmed
+> by ear with a loaded instrument.
 
 ## Stage 5 — bus flattening on export
 

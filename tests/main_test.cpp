@@ -32,6 +32,7 @@
 #include "export/BundleExporter.h"
 #include "export/FlacEncoder.h"
 #include "core/DecibelUtils.h"
+#include "core/MixerTopology.h"
 #include "ui/components/FaderWidget.h"
 #include "core/ProjectSerializer.h"
 #include <QSignalSpy>
@@ -72,6 +73,10 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // MixerTopologyTest
+    void testTopologyOrdersSourcesBeforeDestinations();
+    void testTopologyGainAndOverflow();
 
     // RoutingTest
     void testBusRoutingPersists();
@@ -896,6 +901,79 @@ void MainTest::testBusRoutingRejectsCycles() {
     // Clearing a route is always allowed, and a non-bus destination is never valid.
     QVERIFY(pm.canRouteToBus(aId, QUuid()));
     QVERIFY(!pm.canRouteToBus(aId, sgId));
+}
+
+
+void MainTest::testTopologyOrdersSourcesBeforeDestinations() {
+    // The renderer walks channels front to back, applying each chain then summing into
+    // the destination. That only works if a channel always precedes what it feeds.
+    ProjectManager pm;
+
+    auto outer = std::make_unique<BusNode>();
+    const QUuid outerId = outer->id;
+    auto inner = std::make_unique<BusNode>();
+    const QUuid innerId = inner->id;
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(outer));
+    pm.addNode(std::move(inner));
+    pm.addNode(std::move(sg));
+
+    // group -> inner -> outer -> master
+    static_cast<SampleGroup*>(pm.getNode(sgId))->outputBusId = innerId;
+    static_cast<BusNode*>(pm.getNode(innerId))->outputBusId = outerId;
+
+    // A fresh ProjectManager already holds a default group, so count relative to that
+    // rather than assuming the project is empty.
+    const MixerTopology topology = MixerTopology::build(&pm, AudioEngine::MAX_CHANNELS);
+    QVERIFY(topology.channelCount() >= 3);
+
+    const int sgIdx = topology.indexFor(sgId);
+    const int innerIdx = topology.indexFor(innerId);
+    const int outerIdx = topology.indexFor(outerId);
+    QVERIFY(sgIdx >= 0 && innerIdx >= 0 && outerIdx >= 0);
+
+    QVERIFY2(sgIdx < innerIdx, "group must be rendered before the bus it feeds");
+    QVERIFY2(innerIdx < outerIdx, "inner bus must be rendered before the outer one");
+
+    // Destinations are stored as indices into the same ordering.
+    QCOMPARE(topology.destination[sgIdx], innerIdx);
+    QCOMPARE(topology.destination[innerIdx], outerIdx);
+    QCOMPARE(topology.destination[outerIdx], -1); // outer feeds master
+}
+
+void MainTest::testTopologyGainAndOverflow() {
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = -6.0; // decibels
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->volume = -6.0; // already applied per voice, so it must NOT appear again here
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+
+    const MixerTopology topology = MixerTopology::build(&pm, AudioEngine::MAX_CHANNELS);
+
+    const float busGain = topology.gain[topology.indexFor(busId)];
+    QVERIFY2(busGain > 0.49f && busGain < 0.51f, "bus gain should be -6 dB in linear form");
+
+    const float groupGain = topology.gain[topology.indexFor(sgId)];
+    QVERIFY2(qFuzzyCompare(groupGain, 1.0f),
+             "group gain is applied per voice; applying it again here would double it");
+
+    // Past the cap a channel gets no index, which the callers read as "straight to
+    // master": its audio still plays, it just carries no inserts.
+    const MixerTopology capped = MixerTopology::build(&pm, 1);
+    QCOMPARE(capped.channelCount(), 1);
+    int mapped = 0;
+    for (const QUuid& id : { busId, sgId }) {
+        if (capped.indexFor(id) >= 0) ++mapped;
+    }
+    QVERIFY2(mapped <= 1, "the cap must not hand out more indices than it allows");
+    QVERIFY2(capped.indexFor(QUuid::createUuid()) == -1, "an unknown channel has no index");
 }
 
 QTEST_MAIN(MainTest)
