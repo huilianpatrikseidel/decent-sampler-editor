@@ -1,4 +1,5 @@
 #include "ProjectManager.h"
+#include <QSet>
 #include "ProjectSerializer.h"
 #include <QFile>
 #include <QJsonArray>
@@ -179,6 +180,39 @@ std::vector<Connection> ProjectManager::getConnectionsForNode(const QUuid& id) c
         }
     }
     return conns;
+}
+
+QUuid ProjectManager::getOutputBus(const QUuid& channelId) const {
+    Node* n = getNode(channelId);
+    if (!n) return QUuid();
+    if (n->type == "SampleGroup") return static_cast<SampleGroup*>(n)->outputBusId;
+    if (n->type == "Bus") return static_cast<BusNode*>(n)->outputBusId;
+    return QUuid();
+}
+
+bool ProjectManager::canRouteToBus(const QUuid& channelId, const QUuid& busId) const {
+    Node* channel = getNode(channelId);
+    if (!channel) return false;
+    if (channel->type != "SampleGroup" && channel->type != "Bus") return false;
+
+    if (busId.isNull()) return true; // clearing the route sends the channel to master
+
+    Node* bus = getNode(busId);
+    if (!bus || bus->type != "Bus") return false;
+    if (busId == channelId) return false;
+
+    // Walk the destination's own chain: if it comes back to this channel, the link would
+    // close a loop. The chain is short, and the guard against a corrupt project holding
+    // an existing cycle is the visited set rather than the walk length.
+    QSet<QUuid> visited;
+    QUuid cursor = busId;
+    while (!cursor.isNull()) {
+        if (cursor == channelId) return false;
+        if (visited.contains(cursor)) return false; // already cyclic; refuse to extend it
+        visited.insert(cursor);
+        cursor = getOutputBus(cursor);
+    }
+    return true;
 }
 
 bool ProjectManager::canConnect(const Connection& conn) const {

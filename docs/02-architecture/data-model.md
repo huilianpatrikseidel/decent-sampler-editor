@@ -38,7 +38,10 @@ chains are stored as ordered `insertEffects` lists on the channel instead. See
 ## Channels
 
 A "channel" in the mixer is a `SampleGroup` or a `BusNode`; the master channel is
-represented by a null UUID. `ProjectManager` resolves a channel id to its effects list,
+represented by a null UUID. Each channel carries an `outputBusId` naming the bus it feeds,
+null meaning master. `ProjectManager::canRouteToBus` validates an assignment and rejects
+anything that would close a loop, because a cycle would stall the topological ordering the
+renderer depends on. `ProjectManager` resolves a channel id to its effects list,
 falling back to `AudioStateModel::getMasterEffects` for the null case.
 
 ## Undo & Commands

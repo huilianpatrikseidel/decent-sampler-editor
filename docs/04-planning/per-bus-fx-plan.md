@@ -66,13 +66,19 @@ element per band, so anything after one would otherwise bind to the wrong effect
 Covered by `testGroupInsertChainOrderExported` and
 `testEffectPositionSkipsBypassedAndCountsEqBands`, both confirmed to fail without the fix.
 
-## Stage 3 — group-to-bus routing
+## Stage 3 — group-to-bus routing — **done**
 
 - `outputBusId` (null = master) on `SampleGroup` and `BusNode`, serialised.
 - Cycle rejection on assignment, mirroring the DFS in `ProjectManager::canConnect`.
 - An output selector on the mixer channel strip.
 
-*Verify:* routing persists across save/reload; a cycle is refused.
+Cycle rejection lives in `ProjectManager::canRouteToBus`, which walks the destination's
+own chain rather than the connection graph, and also refuses a chain that is already
+cyclic instead of looping forever on it. The mixer only offers destinations that pass the
+check, so an illegal route cannot be selected in the first place.
+
+Covered by `testBusRoutingPersists` and `testBusRoutingRejectsCycles`; the cycle test was
+confirmed to fail with the guard removed.
 
 ## Stage 4 — per-channel audition
 

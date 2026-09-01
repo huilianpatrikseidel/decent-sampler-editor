@@ -9,6 +9,7 @@ class ApplicationController;
 class FaderWidget;
 class KnobWidget;
 class QLabel;
+class QComboBox;
 class SvgToggleWidget;
 class FxRackWidget;
 
@@ -31,6 +32,7 @@ private:
     KnobWidget* m_panDial;
     QLabel* m_panValueLabel;
     QLabel* m_nameLabel;
+    QComboBox* m_outputCombo = nullptr; // absent on the master strip
     
     SvgToggleWidget* m_btnMute;
     SvgToggleWidget* m_btnSolo;
@@ -38,4 +40,6 @@ private:
     FxRackWidget* m_fxRackWidget;
     
     bool m_updating = false;
+
+    void rebuildOutputChoices();
 };

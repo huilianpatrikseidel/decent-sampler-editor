@@ -9,6 +9,9 @@
 struct BusNode : public Node {
     double volume = 0.0;
     QVector<QUuid> insertEffects;
+
+    // Buses can feed another bus. Null means straight to master.
+    QUuid outputBusId;
     
     void accept(INodeVisitor* v) const override { v->visit(this); }
     BusNode() { type = "Bus"; }
@@ -28,12 +31,14 @@ struct BusNode : public Node {
             effectsArray.append(fx.toString());
         }
         obj["insertEffects"] = effectsArray;
+        obj["outputBusId"] = outputBusId.toString(QUuid::WithoutBraces);
         return obj;
     }
     
     void loadFromJson(const QJsonObject& obj) override {
         Node::loadFromJson(obj);
         volume = obj["volume"].toDouble();
+        outputBusId = QUuid(obj["outputBusId"].toString());
         if (obj.contains("insertEffects")) {
             QJsonArray effectsArray = obj["insertEffects"].toArray();
             for (int i = 0; i < effectsArray.size(); ++i) {

@@ -52,6 +52,10 @@ struct SampleGroup : public Node {
     double filterKeyTrack = 0.0;
     
     QVector<QUuid> insertEffects;
+
+    // Bus this channel feeds; null means straight to master. Buses exist only in the
+    // editor -- on export the chain is flattened into the groups that feed it.
+    QUuid outputBusId;
     
     // Decent Sampler Muting & Triggers
     QString trigger = "attack"; // "attack", "release", "first", "legato"
@@ -86,6 +90,7 @@ struct SampleGroup : public Node {
         obj["isOscillator"] = isOscillator;
         obj["isSynthContainer"] = isSynthContainer;
         obj["synthParentId"] = synthParentId.toString(QUuid::WithoutBraces);
+        obj["outputBusId"] = outputBusId.toString(QUuid::WithoutBraces);
         obj["oscEnabled"] = oscEnabled;
         obj["oscParams"] = oscParams.toJson();
         
@@ -153,6 +158,8 @@ struct SampleGroup : public Node {
         isSynthContainer = nodeObj["isSynthContainer"].toBool(false);
         QString parentIdStr = nodeObj["synthParentId"].toString();
         if (!parentIdStr.isEmpty()) synthParentId = QUuid(parentIdStr);
+        // Absent in projects saved before bus routing existed; null routes to master.
+        outputBusId = QUuid(nodeObj["outputBusId"].toString());
         oscEnabled = nodeObj["oscEnabled"].toBool(true);
         
         if (nodeObj.contains("oscParams")) {

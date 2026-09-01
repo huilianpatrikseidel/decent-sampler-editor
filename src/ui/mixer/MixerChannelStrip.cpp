@@ -2,6 +2,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QComboBox>
 #include <QFontMetrics>
 #include "../components/KnobWidget.h"
 #include "../components/FaderWidget.h"
@@ -66,6 +67,30 @@ MixerChannelStrip::MixerChannelStrip(ApplicationController* appCtrl, const QUuid
     m_nameLabel->setAlignment(Qt::AlignCenter);
     m_nameLabel->setStyleSheet("background: #0a0a0a; color: #4caf50; border: 1px solid #000; border-radius: 3px; padding: 3px 2px; font-family: monospace; font-size: 10px;");
     layout->addWidget(m_nameLabel);
+
+    // Where this channel sends its audio. Master has no output of its own.
+    if (!m_sgId.isNull()) {
+        m_outputCombo = new QComboBox();
+        m_outputCombo->setToolTip("Output destination for this channel");
+        m_outputCombo->setStyleSheet("font-size: 10px; padding: 2px;");
+        layout->addWidget(m_outputCombo);
+
+        connect(m_outputCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+            if (m_updating || index < 0) return;
+            const QUuid target = m_outputCombo->itemData(index).toUuid();
+            if (m_pm->getOutputBus(m_sgId) == target) return;
+
+            if (!m_pm->canRouteToBus(m_sgId, target)) {
+                // Refused (it would loop back here); snap the box to reality.
+                updateFromNode();
+                return;
+            }
+            m_pm->getUndoStack()->push(new ModifyPropertyCommand(
+                m_pm, m_sgId, "outputBusId",
+                m_pm->getOutputBus(m_sgId).toString(QUuid::WithoutBraces),
+                target.toString(QUuid::WithoutBraces)));
+        });
+    }
     
     updateFromNode();
     
@@ -125,8 +150,29 @@ MixerChannelStrip::MixerChannelStrip(ApplicationController* appCtrl, const QUuid
     });
 }
 
+void MixerChannelStrip::rebuildOutputChoices() {
+    if (!m_outputCombo) return;
+
+    m_outputCombo->clear();
+    m_outputCombo->addItem("-> Master", QVariant(QUuid()));
+
+    for (const auto& pair : m_pm->getAllNodes()) {
+        Node* n = pair.second.get();
+        if (n->type != "Bus" || n->id == m_sgId) continue;
+        // Only offer destinations that would not close a loop.
+        if (!m_pm->canRouteToBus(m_sgId, n->id)) continue;
+        const QString name = n->name.isEmpty() ? QStringLiteral("Bus") : n->name;
+        m_outputCombo->addItem("-> " + name, QVariant(n->id));
+    }
+
+    const QUuid current = m_pm->getOutputBus(m_sgId);
+    const int index = m_outputCombo->findData(QVariant(current));
+    m_outputCombo->setCurrentIndex(index >= 0 ? index : 0);
+}
+
 void MixerChannelStrip::updateFromNode() {
     m_updating = true;
+    rebuildOutputChoices();
     
     if (m_sgId.isNull()) {
         m_volumeFader->setValueDb(0.0);

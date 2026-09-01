@@ -22,6 +22,7 @@
 #include <concurrentqueue.h>
 #include <QTemporaryDir>
 #include <QDataStream>
+#include <QJsonDocument>
 #include "ui/canvas/FilmstripRenderer.h"
 #include "ui/canvas/UiComponentItem.h"
 #include "ui/waveform/WaveformCache.h"
@@ -71,6 +72,10 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // RoutingTest
+    void testBusRoutingPersists();
+    void testBusRoutingRejectsCycles();
 
     // ExportChainTest
     void testGroupInsertChainOrderExported();
@@ -835,6 +840,62 @@ void MainTest::testEffectPositionSkipsBypassedAndCountsEqBands() {
 
     // And the next effect sits after all of the equalizer's bands, not just after one.
     QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(tailId)), bandCount);
+}
+
+
+void MainTest::testBusRoutingPersists() {
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->name = "Strings";
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+
+    QVERIFY(pm.getOutputBus(sgId).isNull()); // unrouted channels feed master
+    QVERIFY(pm.canRouteToBus(sgId, busId));
+
+    static_cast<SampleGroup*>(pm.getNode(sgId))->outputBusId = busId;
+    QCOMPARE(pm.getOutputBus(sgId), busId);
+
+    // Survives a save/load round trip.
+    const QJsonObject saved = ProjectSerializer::serializeState(&pm);
+    ProjectManager reloaded;
+    ProjectSerializer::deserializeState(&reloaded, saved);
+    QCOMPARE(reloaded.getOutputBus(sgId), busId);
+}
+
+void MainTest::testBusRoutingRejectsCycles() {
+    // A loop would stall the topological ordering the renderer depends on, so it has to
+    // be refused at assignment rather than discovered later in the audio thread.
+    ProjectManager pm;
+
+    auto a = std::make_unique<BusNode>();
+    const QUuid aId = a->id;
+    auto b = std::make_unique<BusNode>();
+    const QUuid bId = b->id;
+    pm.addNode(std::move(a));
+    pm.addNode(std::move(b));
+
+    QVERIFY(!pm.canRouteToBus(aId, aId));               // straight to itself
+
+    QVERIFY(pm.canRouteToBus(aId, bId));
+    static_cast<BusNode*>(pm.getNode(aId))->outputBusId = bId; // a -> b
+
+    QVERIFY(!pm.canRouteToBus(bId, aId));               // b -> a would close the loop
+
+    // A group may still feed either of them.
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+    QVERIFY(pm.canRouteToBus(sgId, aId));
+
+    // Clearing a route is always allowed, and a non-bus destination is never valid.
+    QVERIFY(pm.canRouteToBus(aId, QUuid()));
+    QVERIFY(!pm.canRouteToBus(aId, sgId));
 }
 
 QTEST_MAIN(MainTest)

@@ -88,6 +88,15 @@ public:
     void addConnection(const Connection& conn);
     void removeConnection(const Connection& conn);
     bool canConnect(const Connection& conn) const;
+
+    // Mixer routing. A channel is a SampleGroup or a Bus; a null destination means the
+    // channel feeds master directly. Buses exist only in the editor -- see
+    // docs/02-architecture/workarounds.md for what export does with them.
+    QUuid getOutputBus(const QUuid& channelId) const;
+
+    // False when the destination is not a bus, or when the link would create a cycle.
+    // A cycle would stall the topological ordering the audio renderer depends on.
+    bool canRouteToBus(const QUuid& channelId, const QUuid& busId) const;
     std::vector<Connection> getConnectionsForNode(const QUuid& id) const;
     const std::vector<Connection>& getAllConnections() const { return m_connections; }
     
