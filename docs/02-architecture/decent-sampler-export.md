@@ -38,12 +38,14 @@ Emitted with a `dB` suffix, and omitted entirely at 0 dB, via `DsGroupBuilder`'s
 
 ## Effects
 
-Instrument-level effects come from the master effects list. Group-level effects are
-emitted as an `<effects>` element nested inside the `<group>`.
+Both instrument-level and group-level chains come from ordered `insertEffects` lists —
+the master list on `AudioStateModel`, and each group's own. Connections are not consulted:
+they carry no ordering, and chain order changes the sound. Group effects are emitted as an
+`<effects>` element nested inside the `<group>`.
 
-`DsEffectBuilder::getEffectPosition` computes the positional index that UI bindings use to
-address an effect. It is fragile — see
-[../04-planning/technical-debt.md](../04-planning/technical-debt.md).
+`DsEffectBuilder::getEffectPosition` gives UI bindings the positional index of a master
+effect, counting what is actually emitted: a bypassed node contributes nothing, and an
+equalizer contributes one element per band.
 
 ## Where the model and the format disagree
 

@@ -207,18 +207,13 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                     }
                 }
                 
-                auto conns = pm->getConnectionsForNode(sg->id);
+                // The channel's insert chain is the ordered insertEffects list, not the
+                // node-graph connections: connections carry no ordering, and chain order
+                // changes the sound. This is also the list the mixer's FX rack writes to,
+                // so what the user arranges is now what gets exported.
                 QList<Node*> localEffects;
-                for (const auto& c : conns) {
-                    if (c.sourceId == sg->id) {
-                        Node* target = pm->getNode(c.targetId);
-                        if (target && (target->type == "Delay" || target->type == "Reverb" || target->type == "Filter" ||
-                                       target->type == "Gain" || target->type == "Phaser" || target->type == "PitchShifter" ||
-                                       target->type == "WaveFolder" || target->type == "WaveShaper" ||
-                                       target->type == "StereoSimulator" || target->type == "BitCrusher")) {
-                            localEffects.append(target);
-                        }
-                    }
+                for (const QUuid& fxId : sg->insertEffects) {
+                    if (Node* fx = pm->getNode(fxId)) localEffects.append(fx);
                 }
                 if (!localEffects.isEmpty()) {
                     DsNode* effectsNode = groupNode->addChild("effects");

@@ -61,20 +61,6 @@ on the CI job so a hang fails in minutes instead of hours.
 
 ---
 
-## Exported UI bindings depend on a positional heuristic
-
-`DsEffectBuilder::getEffectPosition` computes an index into the global effects list, and
-`DsUiBuilder` uses it to bind interface controls to effects. The index is derived by
-re-walking nodes and counting, so any change to effect ordering silently repoints knobs
-in the exported instrument.
-
-*Why:* the format addresses effects positionally; there is no id to bind to.
-
-*Resolution:* compute the ordering once, in the same pass that emits the effects, and
-hand the index to the UI builder rather than recomputing it.
-
----
-
 ## SFZ export ignores oscillators and wavetables
 
 `SfzTranspiler` emits sample regions only. Oscillator groups and wavetable files are

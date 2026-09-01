@@ -26,6 +26,7 @@
 #include "ui/canvas/UiComponentItem.h"
 #include "ui/waveform/WaveformCache.h"
 #include "transpilers/DecentSamplerTranspiler.h"
+#include "transpilers/ds/DsEffectBuilder.h"
 #include "transpilers/SfzTranspiler.h"
 #include "export/BundleExporter.h"
 #include "export/FlacEncoder.h"
@@ -70,6 +71,10 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // ExportChainTest
+    void testGroupInsertChainOrderExported();
+    void testEffectPositionSkipsBypassedAndCountsEqBands();
 
     // VolumeTest
     void testDecibelConversion();
@@ -768,6 +773,68 @@ void MainTest::testGroupVolumeExportedAsDecibels() {
 
     // 0 dB is unity, so the attribute is left out rather than written as a literal 0.
     QVERIFY2(!xml.contains("volume=\"0\""), qPrintable(xml));
+}
+
+
+void MainTest::testGroupInsertChainOrderExported() {
+    // The mixer's FX rack writes insertEffects, and chain order changes the sound.
+    // Connections cannot express order, which is why they are no longer the source.
+    ProjectManager pm;
+
+    auto delay = std::make_unique<DelayNode>();
+    const QUuid delayId = delay->id;
+    auto reverb = std::make_unique<ReverbNode>();
+    const QUuid reverbId = reverb->id;
+    pm.addNode(std::move(delay));
+    pm.addNode(std::move(reverb));
+
+    auto sg = std::make_unique<SampleGroup>();
+    Zone z;
+    z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    sg->insertEffects = { reverbId, delayId }; // reverb first, deliberately
+    pm.addNode(std::move(sg));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    const int reverbAt = xml.indexOf("\"reverb\"");
+    const int delayAt = xml.indexOf("\"delay\"");
+    QVERIFY2(reverbAt >= 0 && delayAt >= 0, qPrintable(xml));
+    QVERIFY2(reverbAt < delayAt, "group insert chain was not exported in insertEffects order");
+}
+
+void MainTest::testEffectPositionSkipsBypassedAndCountsEqBands() {
+    // Bindings address master effects by position. Two things break naive counting: a
+    // bypassed node emits nothing, and an equalizer emits one <effect> per band.
+    ProjectManager pm;
+
+    auto bypassed = std::make_unique<DelayNode>();
+    bypassed->bypassed = true;
+    const QUuid bypassedId = bypassed->id;
+
+    auto eq = std::make_unique<EqualizerNode>();
+    const int bandCount = eq->bands.size();
+    const QUuid eqId = eq->id;
+
+    auto tail = std::make_unique<ChorusNode>();
+    const QUuid tailId = tail->id;
+
+    pm.addNode(std::move(bypassed));
+    pm.addNode(std::move(eq));
+    pm.addNode(std::move(tail));
+    pm.getAudioState()->setMasterEffects({ bypassedId, eqId, tailId });
+
+    QVERIFY(bandCount > 1); // otherwise the test proves nothing about band counting
+
+    // The bypassed effect emits nothing, so it has no position at all.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(bypassedId)), -1);
+
+    // The equalizer starts at 0, since the bypassed node ahead of it emitted nothing.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(eqId)), 0);
+
+    // And the next effect sits after all of the equalizer's bands, not just after one.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(tailId)), bandCount);
 }
 
 QTEST_MAIN(MainTest)

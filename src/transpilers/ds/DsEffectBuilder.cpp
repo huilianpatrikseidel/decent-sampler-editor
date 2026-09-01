@@ -1,41 +1,36 @@
 #include "DsEffectBuilder.h"
 #include "../../core/INodeVisitor.h"
 
+// Instrument-level effects, in the order they are emitted. Master is the only chain that
+// lives at the top level, so its list defines both what is emitted and the positional
+// index that UI bindings use to address an effect.
+static QVector<QUuid> masterChain(const ProjectManager* pm) {
+    return pm->getAudioState()->getMasterEffects();
+}
+
+// How many <effect> elements a node actually emits. Two cases stop this from being 1:
+// a bypassed node emits nothing, and an equalizer emits one element per band. Bindings
+// address effects by position, so the count has to match the emission exactly or every
+// binding after an equalizer points at the wrong effect.
+static int emittedEffectCount(const Node* n) {
+    if (!n || n->bypassed) return 0;
+    if (n->type == "Equalizer") {
+        return static_cast<const EqualizerNode*>(n)->bands.size();
+    }
+    return 1;
+}
+
 int DsEffectBuilder::getEffectPosition(const ProjectManager* pm, const Node* effectNode) {
-    bool isGlobal = true;
-    for (const auto& c : pm->getConnectionsForNode(effectNode->id)) {
-        if (c.targetId == effectNode->id) {
-            Node* src = pm->getNode(c.sourceId);
-            if (src && src->type == "SampleGroup") {
-                isGlobal = false;
-                break;
-            }
+    int pos = 0;
+    for (const QUuid& id : masterChain(pm)) {
+        Node* n = pm->getNode(id);
+        if (!n) continue;
+        if (n->id == effectNode->id) {
+            return n->bypassed ? -1 : pos; // a bypassed effect has no position to bind to
         }
+        pos += emittedEffectCount(n);
     }
-    
-    if (isGlobal) {
-        int pos = 0;
-        for (const auto& pair : pm->getAllNodes()) {
-            const auto& node = pair.second;
-            if (node->type == "Delay" || node->type == "Reverb" || node->type == "Filter" ||
-                node->type == "Gain" || node->type == "Phaser" || node->type == "PitchShifter" ||
-                node->type == "WaveFolder" || node->type == "WaveShaper" ||
-                node->type == "StereoSimulator" || node->type == "BitCrusher") {
-                bool g = true;
-                for (const auto& c : pm->getConnectionsForNode(node->id)) {
-                    if (c.targetId == node->id) {
-                        Node* src = pm->getNode(c.sourceId);
-                        if (src && src->type == "SampleGroup") {
-                            g = false; break;
-                        }
-                    }
-                }
-                if (node->id == effectNode->id) return pos;
-                if (g) pos++;
-            }
-        }
-    }
-    return -1;
+    return -1; // not on the master chain: a group insert, addressed within its group
 }
 
 void DsEffectBuilder::buildSingleEffect(DsNode* parent, const Node* node) {
@@ -187,25 +182,11 @@ void DsEffectBuilder::buildSingleEffect(DsNode* parent, const Node* node) {
 }
 
 void DsEffectBuilder::buildEffects(DsNode* rootEffects, const ProjectManager* pm) {
-    for (const auto& pair : pm->getAllNodes()) {
-        const auto& node = pair.second;
-        if (node->type == "Delay" || node->type == "Reverb" || node->type == "Filter" ||
-            node->type == "Gain" || node->type == "Phaser" || node->type == "PitchShifter" ||
-            node->type == "WaveFolder" || node->type == "WaveShaper" ||
-            node->type == "StereoSimulator" || node->type == "BitCrusher") {
-            bool isGlobal = true;
-            for (const auto& c : pm->getConnectionsForNode(node->id)) {
-                if (c.targetId == node->id) {
-                    Node* src = pm->getNode(c.sourceId);
-                    if (src && src->type == "SampleGroup") {
-                        isGlobal = false;
-                        break;
-                    }
-                }
-            }
-            if (isGlobal) {
-                buildSingleEffect(rootEffects, node.get());
-            }
+    // Master inserts only. Group inserts are emitted inside their own <group> element by
+    // DsGroupBuilder, from that group's insertEffects list.
+    for (const QUuid& id : masterChain(pm)) {
+        if (Node* n = pm->getNode(id)) {
+            buildSingleEffect(rootEffects, n);
         }
     }
 }

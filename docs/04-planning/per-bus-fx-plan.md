@@ -50,7 +50,7 @@ not.
 Covered by `testDecibelConversion` and `testGroupVolumeExportedAsDecibels`, both confirmed
 to fail without the fix.
 
-## Stage 2 — `insertEffects` as the export source
+## Stage 2 — `insertEffects` as the export source — **done**
 
 - `DsGroupBuilder` reads `sg->insertEffects` in order instead of scanning connections.
 - `DsEffectBuilder::buildEffects` takes instrument-level effects from
@@ -59,8 +59,12 @@ to fail without the fix.
 - `DsEffectBuilder::getEffectPosition` reindexes over the new ordering — it feeds UI
   bindings via `DsUiBuilder`, so a wrong index repoints knobs in the exported instrument.
 
-*Verify:* a group with two inserts in a known order exports them in that order; a UI
-binding resolves to the right index.
+`getEffectPosition` now counts what is actually emitted rather than assuming one element
+per node: a bypassed effect emits nothing and has no position, and an equalizer emits one
+element per band, so anything after one would otherwise bind to the wrong effect.
+
+Covered by `testGroupInsertChainOrderExported` and
+`testEffectPositionSkipsBypassedAndCountsEqBands`, both confirmed to fail without the fix.
 
 ## Stage 3 — group-to-bus routing
 
