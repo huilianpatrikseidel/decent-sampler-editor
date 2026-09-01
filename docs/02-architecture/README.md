@@ -9,6 +9,7 @@
 | [workarounds.md](workarounds.md) | Where the editor's concepts do not exist in the format, and how export bridges the gap |
 | [build-and-toolchain.md](build-and-toolchain.md) | CMake layout, export macros, compiler traps, CI |
 | [testing.md](testing.md) | Running the suite, sanitizers, and what the harness cannot tell you |
+| [ui-automation.md](ui-automation.md) | Driving the interface from outside the process |
 | [ui-automation.md](ui-automation.md) | Driving the running app from outside via Windows UI Automation, and the gotchas that cost time |
 
 *Last verified: 2026-09-01*
