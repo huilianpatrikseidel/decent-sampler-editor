@@ -21,18 +21,19 @@ Two things the harness cannot do, both of which have already cost real time:
 **It cannot tell you which case failed.** Everything runs under one `ctest` entry, so a
 failure or a hang is reported against the suite as a whole.
 
-**Its console output does not survive.** Piping the binary's stdout yields nothing, which
-is why the Windows CI hang could not be attributed to a case. QtTest will write a report
-to a file, though, and that does work:
+**Its output needs two environment variables.** `QT_ASSUME_STDERR_HAS_CONSOLE=1` is the
+one that matters: the binary has no console of its own, so without it Qt discards every
+line and the suite appears silent. `-o report.txt,txt` writes the same report to a file,
+which is useful when the console is not available at all.
 
 ```bash
-QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe -o out.txt,txt
+QT_QPA_PLATFORM=offscreen QT_ASSUME_STDERR_HAS_CONSOLE=1   ./build/tests/SamplerEditorTests.exe [testName] -o report.txt,txt
 ```
 
-Pass a slot name before `-o` to run a single case. This is the way to find out which case
-failed or hung.
-
-Resolution is tracked in [../04-planning/technical-debt.md](../04-planning/technical-debt.md).
+**Run it from the binary's own directory.** With the build root as the working directory,
+Qt picks up the deployed plugin folder there, fails to initialise a platform, and on
+Windows raises a **modal dialog** — the process then blocks forever with no output.
+`ctest` avoids this because CMake gives the test its own working directory.
 
 ## Proving a test actually runs
 

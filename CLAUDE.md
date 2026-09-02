@@ -106,12 +106,23 @@ MinGW and fails on MSVC with `LNK2019`. Forward declarations must match the defi
 ### The test suite reports as a single case
 
 All of QtTest runs under **one** `ctest` entry, so a failure is attributed to the suite
-rather than to a case. Piping the binary's stdout yields nothing, but QtTest will write a
-report to a file, and that works:
+rather than to a case.
+
+The output *is* recoverable, and two environment details decide whether you see anything:
 
 ```bash
-QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe [testName] -o out.txt,txt
+QT_QPA_PLATFORM=offscreen QT_ASSUME_STDERR_HAS_CONSOLE=1 ./build/tests/SamplerEditorTests.exe
 ```
+
+`QT_ASSUME_STDERR_HAS_CONSOLE=1` is the one that matters — the binary has no console of
+its own, and without it Qt discards every line, which is why the suite long looked
+silent. `-o report.txt,txt` writes the same report to a file.
+
+**Run it from the binary's own directory.** Starting it with the build root as the working
+directory makes Qt pick up the deployed plugin folder there, fail to initialise a
+platform, and on Windows raise a **modal dialog** that blocks until something kills it.
+That is a hang with no output at all, and it is the shape of failure the Windows CI job
+has been showing.
 
 To prove a new test actually runs, invert its assertion and confirm the suite turns red.
 

@@ -53,16 +53,13 @@ limit rather than a regression.
 The whole QtTest binary is one `ctest` entry, so a failure or hang is attributed to the
 suite rather than to a case.
 
-Its output is recoverable, though: QtTest writes a report when asked, which works even
-though the binary's console output is otherwise unavailable.
+The output itself is no longer a mystery: `QT_ASSUME_STDERR_HAS_CONSOLE=1` makes it
+visible, and the CI workflow sets it. A hang still cannot be named by ctest, so the
+workflow falls back to running each function in turn and printing its name first — the
+last name printed before the step times out is the culprit.
 
-```bash
-QT_QPA_PLATFORM=offscreen ./build/tests/SamplerEditorTests.exe [testName] -o out.txt,txt
-```
-
-*Resolution:* register each test slot as its own `add_test`, and set `timeout-minutes` on
-the CI job so a hang fails in minutes rather than hours. Until then, the command above is
-how to find out which case failed.
+*Resolution:* register each test slot as its own `add_test`, which would make ctest report
+per case natively and remove the fallback.
 
 ---
 

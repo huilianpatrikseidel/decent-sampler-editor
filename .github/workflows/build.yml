@@ -10,6 +10,9 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # A hung test once ran until the six-hour default ceiling, burning runner minutes and
+    # producing no log at all. Nothing here legitimately takes this long.
+    timeout-minutes: 60
     # Linux is the required gate. Windows (MSVC vs the project's MinGW toolchain) and
     # macOS are run for visibility but are non-blocking work-in-progress for now.
     continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
@@ -44,7 +47,58 @@ jobs:
 
     - name: Run Tests
       working-directory: ${{github.workspace}}/build
-      # offscreen platform lets the QtTest GUI tests run on headless CI runners.
-      run: ctest -C Release --output-on-failure
+      timeout-minutes: 15
+      # --timeout bounds a single stuck case instead of letting it hold the whole job.
+      # offscreen lets the QtTest GUI tests run headless. QT_ASSUME_STDERR_HAS_CONSOLE
+      # is what makes the output visible at all: the binary has no console of its own, so
+      # without it Qt swallows every line and --output-on-failure prints nothing useful.
+      run: ctest -C Release --output-on-failure --timeout 300
       env:
         QT_QPA_PLATFORM: offscreen
+        QT_ASSUME_STDERR_HAS_CONSOLE: 1
+
+    # ctest runs the whole suite as one entry, so it can say the suite failed but not
+    # which case hung. This runs the functions one at a time, printing each name before
+    # running it: if the step is killed by its timeout, the last name printed is the one
+    # that hangs. Names come from the source rather than the binary, so this still works
+    # when the binary cannot start.
+    - name: Identify failing test case
+      if: failure()
+      timeout-minutes: 20
+      shell: bash
+      env:
+        QT_QPA_PLATFORM: offscreen
+        QT_ASSUME_STDERR_HAS_CONSOLE: 1
+      run: |
+        cd "${{github.workspace}}/build"
+        bin=$(find . -type f \( -name 'SamplerEditorTests' -o -name 'SamplerEditorTests.exe' \) | head -1)
+        if [ -z "$bin" ]; then echo "test binary not found"; exit 0; fi
+        bin=$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")
+
+        # Run from the binary's own directory. Starting it from the build root makes Qt
+        # pick up the deployed plugin folder there and fail to initialise a platform,
+        # which on Windows raises a modal dialog and blocks until the job is killed.
+        cd "$(dirname "$bin")"
+
+        mkdir -p reports
+        grep -oE "void test[A-Za-z0-9_]+\(\);" "${{github.workspace}}/tests/main_test.cpp" | sed -E "s/^void //; s/\(\);\$//" | sort -u > reports/functions.txt
+        echo "found $(wc -l < reports/functions.txt) test functions"
+
+        while read -r fn; do
+          [ -z "$fn" ] && continue
+          echo "--- running $fn"
+          if "$bin" "$fn" -o "reports/$fn.txt,txt" > /dev/null 2>&1; then
+            echo "    PASS $fn"
+          else
+            echo "    FAIL $fn"
+            cat "reports/$fn.txt" 2>/dev/null || true
+          fi
+        done < reports/functions.txt
+
+    - name: Upload test reports
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-reports-${{ matrix.os }}
+        path: ${{github.workspace}}/build/**/reports
+        if-no-files-found: ignore
