@@ -2,7 +2,7 @@
 #include "IInspectorStrategy.h"
 #include <QUuid>
 
-class Zone;
+struct Zone;
 
 class ZoneInspectorStrategy : public IInspectorStrategy {
 public:

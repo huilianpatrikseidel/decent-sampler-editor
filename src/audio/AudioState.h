@@ -20,6 +20,13 @@ public:
     static const int MAX_NODES = 256;
     
     std::atomic<float> masterVolume{1.0f};
+
+    // Live MIDI controllers: written by the MIDI thread, read by the audio thread.
+    // Stored already normalised so the mod matrix can consume them directly.
+    std::atomic<float> modWheel{0.0f};    // CC 1, 0..1
+    std::atomic<float> pitchBend{0.0f};   // -1..1, 0 = centred
+    std::atomic<float> aftertouch{0.0f};  // channel/poly pressure, 0..1
+
     NodeParamBlock nodeParams[MAX_NODES];
     
     int getOrAllocateBlock(const QUuid& id) {

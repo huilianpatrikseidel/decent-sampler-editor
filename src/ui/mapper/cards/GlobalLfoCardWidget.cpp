@@ -13,6 +13,14 @@
 #include <QPen>
 #include <QtMath>
 
+// MSVC does not expose M_PI from <cmath> without _USE_MATH_DEFINES, which has to be
+// defined before the first include of it anywhere in the translation unit. Defining the
+// constant directly is order-independent and works on every compiler.
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+
 GlobalLfoCardWidget::GlobalLfoCardWidget(ProjectManager* pm, const LFO& lfoData, QWidget* parent)
     : SynthCardBase(lfoData.name, [pm, lfoData]() { pm->getUndoStack()->push(new RemoveLfoCommand(pm, lfoData)); }, parent),
       m_pm(pm) {

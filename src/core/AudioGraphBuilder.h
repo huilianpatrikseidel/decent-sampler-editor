@@ -19,6 +19,9 @@ struct RenderZone {
     float glideTime = 0.0f;
     QUuid groupId;
     int paramBlockIndex = -1;
+    // Mixer channel this zone's voices sum into; -1 routes straight to master with no
+    // inserts. Comes from MixerTopology so it matches the chains VstPluginManager builds.
+    int channelIndex = -1;
     
     float modAttack = 0.0f;
     float modDecay = 0.0f;

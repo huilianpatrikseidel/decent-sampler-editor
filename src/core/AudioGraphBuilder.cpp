@@ -1,7 +1,14 @@
 #include "AudioGraphBuilder.h"
+#include "DecibelUtils.h"
+#include "MixerTopology.h"
+#include "audio/AudioEngine.h"
 
 std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, AudioEngine* audioEngine) {
     std::vector<RenderZone> newZones;
+
+    // One topology per rebuild: VstPluginManager builds its chains from the same call, so
+    // both sides agree on which index is which channel.
+    const MixerTopology topology = MixerTopology::build(pm, AudioEngine::MAX_CHANNELS);
     
     for (const auto& pair : pm->getAllNodes()) {
         const auto& node = pair.second;
@@ -14,7 +21,9 @@ std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, 
                 rz.decay = sg->ampEnv.decay;
                 rz.sustain = sg->ampEnv.sustain;
                 rz.release = sg->ampEnv.release;
-                rz.volume = sg->volume;
+                // sg->volume is decibels; the voice multiplies this straight into
+                // its output, so it has to be linear by the time it gets there.
+                rz.volume = DecibelUtils::dbToLinear(sg->volume);
                 
                 rz.modAttack = sg->modEnv.attack;
                 rz.modDecay = sg->modEnv.decay;
@@ -25,9 +34,10 @@ std::vector<RenderZone> AudioGraphBuilder::buildRenderGraph(ProjectManager* pm, 
                 rz.glideTime = sg->glideTime;
                 rz.groupId = sg->id;
                 
+                rz.channelIndex = topology.indexFor(sg->id);
                 rz.paramBlockIndex = audioEngine->getAudioState()->getOrAllocateBlock(sg->id);
                 if (rz.paramBlockIndex != -1) {
-                    audioEngine->getAudioState()->nodeParams[rz.paramBlockIndex].volume.store(sg->volume, std::memory_order_relaxed);
+                    audioEngine->getAudioState()->nodeParams[rz.paramBlockIndex].volume.store(DecibelUtils::dbToLinear(sg->volume), std::memory_order_relaxed);
                     // Add other continuous parameters here (cutoff, resonance, etc.)
                 }
                 

@@ -22,15 +22,26 @@
 #include <concurrentqueue.h>
 #include <QTemporaryDir>
 #include <QDataStream>
+#include <QJsonDocument>
 #include "ui/canvas/FilmstripRenderer.h"
 #include "ui/canvas/UiComponentItem.h"
 #include "ui/waveform/WaveformCache.h"
 #include "transpilers/DecentSamplerTranspiler.h"
+#include "transpilers/ds/DsEffectBuilder.h"
 #include "transpilers/SfzTranspiler.h"
 #include "export/BundleExporter.h"
+#include "export/FlacEncoder.h"
+#include "core/DecibelUtils.h"
+#include "core/MixerTopology.h"
+#include "ui/components/FaderWidget.h"
 #include "core/ProjectSerializer.h"
 #include <QSignalSpy>
+#include <miniz.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <memory>
+#include <vector>
 
 class MainTest : public QObject {
     Q_OBJECT
@@ -46,6 +57,7 @@ private slots:
     void testLockFreeQueueMessaging();
     void testAudioMessageDefaults();
     void testVoiceAdoptLifecycle();
+    void testMidiModulationSources();
     void testAudioEngineSourceLifecycle();
     
     // ProjectManagerTest
@@ -61,7 +73,128 @@ private slots:
     void testWaveformCache();
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
+
+    // BusFlatteningTest
+    void testBusGainFoldsIntoGroupVolume();
+    void testBusEffectsReplicatedOntoGroups();
+    void testSynthChildrenInheritBusRoute();
+
+    // MixerTopologyTest
+    void testTopologyOrdersSourcesBeforeDestinations();
+    void testTopologyGainAndOverflow();
+
+    // RoutingTest
+    void testBusRoutingPersists();
+    void testBusRoutingRejectsCycles();
+
+    // ExportChainTest
+    void testGroupInsertChainOrderExported();
+    void testEffectPositionSkipsBypassedAndCountsEqBands();
+
+    // VolumeTest
+    void testDecibelConversion();
+    void testGroupVolumeExportedAsDecibels();
+
+    // ExportTest
+    void testFlacEncoderRoundTrip();
+    void testFlacEncoderRejectsFloatWav();
+    void testBundleIncludesWavetable();
 };
+
+namespace {
+
+// Builds a RIFF/WAVE file around `samples`, which are signed and right-aligned to `bits`.
+// 8-bit WAV data is unsigned on disk, so it is biased on the way out.
+QByteArray buildWav(const std::vector<qint32>& samples, int channels, int sampleRate,
+                    int bits, quint16 formatTag = 1) {
+    const int bytesPerSample = bits / 8;
+    QByteArray pcm;
+    pcm.reserve(static_cast<int>(samples.size()) * bytesPerSample);
+    for (qint32 sample : samples) {
+        const quint32 v = (bits == 8) ? static_cast<quint32>(sample + 128)
+                                      : static_cast<quint32>(sample);
+        for (int b = 0; b < bytesPerSample; ++b) {
+            pcm.append(static_cast<char>((v >> (8 * b)) & 0xFF));
+        }
+    }
+
+    const quint32 dataSize = static_cast<quint32>(pcm.size());
+    QByteArray wav;
+    QDataStream s(&wav, QIODevice::WriteOnly);
+    s.setByteOrder(QDataStream::LittleEndian);
+    s.writeRawData("RIFF", 4); s << static_cast<quint32>(36 + dataSize); s.writeRawData("WAVE", 4);
+    s.writeRawData("fmt ", 4);
+    s << static_cast<quint32>(16)
+      << formatTag
+      << static_cast<quint16>(channels)
+      << static_cast<quint32>(sampleRate)
+      << static_cast<quint32>(sampleRate * channels * bytesPerSample)
+      << static_cast<quint16>(channels * bytesPerSample)
+      << static_cast<quint16>(bits);
+    s.writeRawData("data", 4); s << dataSize; s.writeRawData(pcm.constData(), pcm.size());
+    return wav;
+}
+
+// A signal built to hit every subframe path: a silent run (CONSTANT), a smooth tone
+// (fixed predictors pay off), and white noise (they do not, so VERBATIM takes over).
+std::vector<qint32> buildTestSignal(int frames, int channels, int bits) {
+    const qint32 peak = (1 << (bits - 1)) - 1;
+    std::vector<qint32> out(static_cast<size_t>(frames) * channels);
+    quint32 rng = 12345u;
+    for (int i = 0; i < frames; ++i) {
+        rng = rng * 1664525u + 1013904223u;
+        qint32 base;
+        if (i < frames / 4) {
+            base = 0;
+        } else if (i < frames / 2) {
+            const double t = static_cast<double>(i) / 44100.0;
+            base = static_cast<qint32>(std::sin(2.0 * 3.14159265358979323846 * 220.0 * t) * peak * 0.9);
+        } else {
+            base = static_cast<qint32>(rng >> 8) % (peak + 1);
+            if ((rng & 1u) != 0) base = -base;
+        }
+        for (int c = 0; c < channels; ++c) {
+            // Channel 1 tracks channel 0 loosely, so stereo decorrelation has something to find.
+            const qint32 v = (c == 0) ? base : base / 2 + 7;
+            out[static_cast<size_t>(i) * channels + c] = std::clamp(v, -peak - 1, peak);
+        }
+    }
+    return out;
+}
+
+// Decodes a FLAC stream back to signed samples right-aligned to `bits`.
+bool decodeFlac(const QByteArray& flac, int bits, int channels, std::vector<qint32>& out) {
+    ma_decoder_config config = ma_decoder_config_init(ma_format_s32, 0, 0);
+    ma_decoder decoder;
+    if (ma_decoder_init_memory(flac.constData(), static_cast<size_t>(flac.size()),
+                               &config, &decoder) != MA_SUCCESS) {
+        return false;
+    }
+    if (static_cast<int>(decoder.outputChannels) != channels) {
+        ma_decoder_uninit(&decoder);
+        return false;
+    }
+
+    ma_uint64 total = 0;
+    ma_decoder_get_length_in_pcm_frames(&decoder, &total);
+    out.resize(static_cast<size_t>(total) * channels);
+
+    ma_uint64 done = 0;
+    while (done < total) {
+        ma_uint64 read = 0;
+        ma_decoder_read_pcm_frames(&decoder, out.data() + done * channels, total - done, &read);
+        if (read == 0) break;
+        done += read;
+    }
+    ma_decoder_uninit(&decoder);
+
+    out.resize(static_cast<size_t>(done) * channels);
+    const int shift = 32 - bits;
+    for (qint32& v : out) v >>= shift;
+    return done == total && total > 0;
+}
+
+} // namespace
 
 void MainTest::testNodeCreationAndUUID() {
     auto group = std::make_unique<SampleGroup>();
@@ -128,6 +261,55 @@ void MainTest::testVoiceAdoptLifecycle() {
     QVERIFY(voice.adopt(nullptr) == nullptr);  // slot is now empty
 
     // Slot left empty on purpose: ~VoiceProcessor() must not uninit a sentinel pointer.
+}
+
+void MainTest::testMidiModulationSources() {
+    // ModWheel / PitchBend / Aftertouch used to fall through the mod-source switch and
+    // contribute nothing at all. Render an oscillator voice with each one routed to
+    // Volume at full negative depth: at source 0 the voice sounds, at source 1 it is
+    // fully attenuated. Anything that does not reach the switch leaves both equal.
+    auto renderPeak = [](ModSource source, float sourceValue) {
+        AudioMessage msg;
+        msg.note = 69;
+        msg.velocity = 127;
+        msg.volume = 1.0f;
+        msg.sustain = 1.0f;
+        msg.isOscillator = true;
+        msg.oscWaveform = 0; // sine
+        msg.numRoutings = 1;
+        msg.routings[0].source = source;
+        msg.routings[0].dest = ModDest::Volume;
+        msg.routings[0].amount = -1.0f;
+
+        VoiceProcessor voice;
+        voice.setSampleRate(44100.0);
+        voice.trigger(msg, msg.note);
+
+        ModInputs mods;
+        switch (source) {
+            case ModSource::ModWheel: mods.modWheel = sourceValue; break;
+            case ModSource::PitchBend: mods.pitchBend = sourceValue; break;
+            case ModSource::Aftertouch: mods.aftertouch = sourceValue; break;
+            default: break;
+        }
+
+        float peak = 0.0f;
+        for (int i = 0; i < 2048; ++i) {
+            float l = 0.0f, r = 0.0f;
+            voice.process(mods, l, r, nullptr);
+            peak = std::max(peak, std::abs(l));
+        }
+        return peak;
+    };
+
+    const ModSource sources[] = { ModSource::ModWheel, ModSource::PitchBend, ModSource::Aftertouch };
+    for (ModSource source : sources) {
+        const float idle = renderPeak(source, 0.0f);
+        const float driven = renderPeak(source, 1.0f);
+
+        QVERIFY2(idle > 0.01f, "oscillator voice produced no signal at all");
+        QVERIFY2(driven < idle * 0.01f, "mod source did not reach the voice");
+    }
 }
 
 void MainTest::testAudioEngineSourceLifecycle() {
@@ -431,6 +613,497 @@ void MainTest::testSfzTranspiler() {
     QVERIFY(sfz.contains("<region>"));
     QVERIFY(sfz.contains("sample=bass.wav"));
     QVERIFY(sfz.contains("lokey=30 hikey=34"));
+}
+
+void MainTest::testFlacEncoderRoundTrip() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    struct Case { int bits; int channels; int frames; const char* name; };
+    // 5000 frames spans two 4096-sample blocks, so the short trailing block is covered too.
+    const Case cases[] = {
+        { 16, 2, 5000, "stereo16.wav" },
+        { 24, 1, 4096, "mono24.wav" },
+        {  8, 1, 1000, "mono8.wav"   },
+    };
+
+    for (const Case& c : cases) {
+        const std::vector<qint32> original = buildTestSignal(c.frames, c.channels, c.bits);
+        const QByteArray wav = buildWav(original, c.channels, 44100, c.bits);
+
+        const QString wavPath = dir.filePath(QString::fromLatin1(c.name));
+        {
+            QFile f(wavPath);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+        }
+
+        QVERIFY2(FlacEncoder::canEncode(wavPath), c.name);
+
+        QByteArray flac;
+        QVERIFY2(FlacEncoder::encodeFile(wavPath, flac), c.name);
+        QVERIFY2(flac.startsWith("fLaC"), c.name);
+
+        // The whole point of the feature: the bundle entry must be smaller than the WAV.
+        QVERIFY2(flac.size() < wav.size(), c.name);
+
+        // And lossless: every sample must survive the round trip untouched.
+        std::vector<qint32> decoded;
+        QVERIFY2(decodeFlac(flac, c.bits, c.channels, decoded), c.name);
+        QCOMPARE(decoded.size(), original.size());
+        for (size_t i = 0; i < original.size(); ++i) {
+            if (decoded[i] != original[i]) {
+                QFAIL(qPrintable(QString("%1: sample %2 changed: %3 -> %4")
+                                 .arg(c.name).arg(i).arg(original[i]).arg(decoded[i])));
+            }
+        }
+
+        // The bundle name follows from the same decision the transpiler makes.
+        QVERIFY(BundleExporter::getBundleSampleName(wavPath).endsWith(".flac"));
+    }
+}
+
+void MainTest::testFlacEncoderRejectsFloatWav() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // WAVE_FORMAT_IEEE_FLOAT cannot be encoded losslessly here, so it must be refused and
+    // stored as-is rather than silently truncated to an integer depth.
+    const QString floatPath = dir.filePath("float32.wav");
+    {
+        QByteArray wav = buildWav(std::vector<qint32>(256, 0), 1, 44100, 32, /*formatTag=*/3);
+        QFile f(floatPath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+    }
+
+    QVERIFY(!FlacEncoder::canEncode(floatPath));
+    QVERIFY(BundleExporter::getBundleSampleName(floatPath).endsWith(".wav"));
+
+    // A path that is not a WAV at all must also be left alone.
+    QVERIFY(!FlacEncoder::canEncode(dir.filePath("missing.wav")));
+    QVERIFY(!FlacEncoder::canEncode(dir.filePath("sample.ogg")));
+}
+
+void MainTest::testBundleIncludesWavetable() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // A real WAV, so the exporter has something to actually read and store.
+    const QString wavetablePath = dir.filePath("table.wav");
+    {
+        const QByteArray wav = buildWav(buildTestSignal(512, 1, 16), 1, 44100, 16);
+        QFile f(wavetablePath);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        QCOMPARE(static_cast<int>(f.write(wav)), wav.size());
+    }
+
+    ProjectManager pm;
+    pm.createNewProject("WavetableBundle");
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Osc";
+    sg->isOscillator = true;
+    sg->oscParams.waveform = "wavetable";
+    sg->oscParams.wavetableFile = wavetablePath;
+    pm.addNode(std::move(sg));
+
+    pm.getPresetManager()->addPreset("Main");
+
+    const QString bundlePath = dir.filePath("out.dslibrary");
+    QString error;
+    QVERIFY2(BundleExporter::exportToDecentSampler(&pm, bundlePath, error), qPrintable(error));
+
+    // The transpiler writes the wavetable under this name; the archive must contain it.
+    const QString expected = BundleExporter::getSafeExportName(wavetablePath, false);
+
+    mz_zip_archive zip;
+    memset(&zip, 0, sizeof(zip));
+    QVERIFY(mz_zip_reader_init_file(&zip, bundlePath.toUtf8().constData(), 0));
+
+    QStringList entries;
+    const mz_uint count = mz_zip_reader_get_num_files(&zip);
+    for (mz_uint i = 0; i < count; ++i) {
+        mz_zip_archive_file_stat stat;
+        if (mz_zip_reader_file_stat(&zip, i, &stat)) {
+            entries << QString::fromUtf8(stat.m_filename);
+        }
+    }
+    mz_zip_reader_end(&zip);
+
+    QVERIFY2(entries.contains(expected),
+             qPrintable(QString("wavetable '%1' missing from bundle; entries: %2")
+                        .arg(expected, entries.join(", "))));
+}
+
+
+void MainTest::testDecibelConversion() {
+    // 0 dB is unity. The whole model stores volumes in dB and defaults them to 0.0, so
+    // getting this backwards renders every channel silent.
+    QVERIFY(qFuzzyCompare(DecibelUtils::dbToLinear(0.0) + 1.0f, 2.0f));
+    QVERIFY(DecibelUtils::dbToLinear(-6.0) < 0.51f);
+    QVERIFY(DecibelUtils::dbToLinear(-6.0) > 0.49f);
+    QVERIFY(DecibelUtils::dbToLinear(6.0) > 1.99f);
+    QCOMPARE(DecibelUtils::dbToLinear(-96.0), 0.0f);
+    QCOMPARE(DecibelUtils::dbToLinear(-200.0), 0.0f);
+
+    // The fader speaks dB and must round-trip the values a user actually lands on.
+    FaderWidget fader;
+    for (double db : { 0.0, -6.0, 6.0, -30.0 }) {
+        fader.setValueDb(db);
+        QVERIFY2(std::abs(fader.valueDb() - db) < 0.5,
+                 qPrintable(QString("fader lost %1 dB (got %2)").arg(db).arg(fader.valueDb())));
+    }
+    // A fader at unity must be exactly 0 dB, not merely close to it.
+    fader.setValueDb(0.0);
+    QVERIFY(std::abs(fader.valueDb()) < 1e-9);
+}
+
+void MainTest::testGroupVolumeExportedAsDecibels() {
+    ProjectManager pm;
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Quiet";
+    sg->volume = -6.0; // decibels
+    Zone z;
+    z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    pm.addNode(std::move(sg));
+
+    auto loud = std::make_unique<SampleGroup>();
+    loud->name = "Unity";
+    loud->volume = 0.0; // 0 dB
+    Zone z2;
+    z2.samplePath = "b.wav";
+    loud->zones.push_back(z2);
+    pm.addNode(std::move(loud));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // A bare number means a linear 0..1 multiplier to Decent Sampler, so -6 would be a
+    // 6x boost and 0 would be total silence. The suffix is what makes it decibels.
+    QVERIFY2(xml.contains("volume=\"-6dB\""), qPrintable(xml));
+    QVERIFY2(!xml.contains("volume=\"-6\""), qPrintable(xml));
+
+    // 0 dB is unity, so the attribute is left out rather than written as a literal 0.
+    QVERIFY2(!xml.contains("volume=\"0\""), qPrintable(xml));
+}
+
+
+void MainTest::testGroupInsertChainOrderExported() {
+    // The mixer's FX rack writes insertEffects, and chain order changes the sound.
+    // Connections cannot express order, which is why they are no longer the source.
+    ProjectManager pm;
+
+    auto delay = std::make_unique<DelayNode>();
+    const QUuid delayId = delay->id;
+    auto reverb = std::make_unique<ReverbNode>();
+    const QUuid reverbId = reverb->id;
+    pm.addNode(std::move(delay));
+    pm.addNode(std::move(reverb));
+
+    auto sg = std::make_unique<SampleGroup>();
+    Zone z;
+    z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    sg->insertEffects = { reverbId, delayId }; // reverb first, deliberately
+    pm.addNode(std::move(sg));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    const int reverbAt = xml.indexOf("\"reverb\"");
+    const int delayAt = xml.indexOf("\"delay\"");
+    QVERIFY2(reverbAt >= 0 && delayAt >= 0, qPrintable(xml));
+    QVERIFY2(reverbAt < delayAt, "group insert chain was not exported in insertEffects order");
+}
+
+void MainTest::testEffectPositionSkipsBypassedAndCountsEqBands() {
+    // Bindings address master effects by position. Two things break naive counting: a
+    // bypassed node emits nothing, and an equalizer emits one <effect> per band.
+    ProjectManager pm;
+
+    auto bypassed = std::make_unique<DelayNode>();
+    bypassed->bypassed = true;
+    const QUuid bypassedId = bypassed->id;
+
+    auto eq = std::make_unique<EqualizerNode>();
+    const int bandCount = eq->bands.size();
+    const QUuid eqId = eq->id;
+
+    auto tail = std::make_unique<ChorusNode>();
+    const QUuid tailId = tail->id;
+
+    pm.addNode(std::move(bypassed));
+    pm.addNode(std::move(eq));
+    pm.addNode(std::move(tail));
+    pm.getAudioState()->setMasterEffects({ bypassedId, eqId, tailId });
+
+    QVERIFY(bandCount > 1); // otherwise the test proves nothing about band counting
+
+    // The bypassed effect emits nothing, so it has no position at all.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(bypassedId)), -1);
+
+    // The equalizer starts at 0, since the bypassed node ahead of it emitted nothing.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(eqId)), 0);
+
+    // And the next effect sits after all of the equalizer's bands, not just after one.
+    QCOMPARE(DsEffectBuilder::getEffectPosition(&pm, pm.getNode(tailId)), bandCount);
+}
+
+
+void MainTest::testBusRoutingPersists() {
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->name = "Strings";
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+
+    QVERIFY(pm.getOutputBus(sgId).isNull()); // unrouted channels feed master
+    QVERIFY(pm.canRouteToBus(sgId, busId));
+
+    static_cast<SampleGroup*>(pm.getNode(sgId))->outputBusId = busId;
+    QCOMPARE(pm.getOutputBus(sgId), busId);
+
+    // Survives a save/load round trip.
+    const QJsonObject saved = ProjectSerializer::serializeState(&pm);
+    ProjectManager reloaded;
+    ProjectSerializer::deserializeState(&reloaded, saved);
+    QCOMPARE(reloaded.getOutputBus(sgId), busId);
+}
+
+void MainTest::testBusRoutingRejectsCycles() {
+    // A loop would stall the topological ordering the renderer depends on, so it has to
+    // be refused at assignment rather than discovered later in the audio thread.
+    ProjectManager pm;
+
+    auto a = std::make_unique<BusNode>();
+    const QUuid aId = a->id;
+    auto b = std::make_unique<BusNode>();
+    const QUuid bId = b->id;
+    pm.addNode(std::move(a));
+    pm.addNode(std::move(b));
+
+    QVERIFY(!pm.canRouteToBus(aId, aId));               // straight to itself
+
+    QVERIFY(pm.canRouteToBus(aId, bId));
+    static_cast<BusNode*>(pm.getNode(aId))->outputBusId = bId; // a -> b
+
+    QVERIFY(!pm.canRouteToBus(bId, aId));               // b -> a would close the loop
+
+    // A group may still feed either of them.
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+    QVERIFY(pm.canRouteToBus(sgId, aId));
+
+    // Clearing a route is always allowed, and a non-bus destination is never valid.
+    QVERIFY(pm.canRouteToBus(aId, QUuid()));
+    QVERIFY(!pm.canRouteToBus(aId, sgId));
+}
+
+
+void MainTest::testTopologyOrdersSourcesBeforeDestinations() {
+    // The renderer walks channels front to back, applying each chain then summing into
+    // the destination. That only works if a channel always precedes what it feeds.
+    ProjectManager pm;
+
+    auto outer = std::make_unique<BusNode>();
+    const QUuid outerId = outer->id;
+    auto inner = std::make_unique<BusNode>();
+    const QUuid innerId = inner->id;
+    auto sg = std::make_unique<SampleGroup>();
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(outer));
+    pm.addNode(std::move(inner));
+    pm.addNode(std::move(sg));
+
+    // group -> inner -> outer -> master
+    static_cast<SampleGroup*>(pm.getNode(sgId))->outputBusId = innerId;
+    static_cast<BusNode*>(pm.getNode(innerId))->outputBusId = outerId;
+
+    // A fresh ProjectManager already holds a default group, so count relative to that
+    // rather than assuming the project is empty.
+    const MixerTopology topology = MixerTopology::build(&pm, AudioEngine::MAX_CHANNELS);
+    QVERIFY(topology.channelCount() >= 3);
+
+    const int sgIdx = topology.indexFor(sgId);
+    const int innerIdx = topology.indexFor(innerId);
+    const int outerIdx = topology.indexFor(outerId);
+    QVERIFY(sgIdx >= 0 && innerIdx >= 0 && outerIdx >= 0);
+
+    QVERIFY2(sgIdx < innerIdx, "group must be rendered before the bus it feeds");
+    QVERIFY2(innerIdx < outerIdx, "inner bus must be rendered before the outer one");
+
+    // Destinations are stored as indices into the same ordering.
+    QCOMPARE(topology.destination[sgIdx], innerIdx);
+    QCOMPARE(topology.destination[innerIdx], outerIdx);
+    QCOMPARE(topology.destination[outerIdx], -1); // outer feeds master
+}
+
+void MainTest::testTopologyGainAndOverflow() {
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = -6.0; // decibels
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->volume = -6.0; // already applied per voice, so it must NOT appear again here
+    const QUuid sgId = sg->id;
+    pm.addNode(std::move(sg));
+
+    const MixerTopology topology = MixerTopology::build(&pm, AudioEngine::MAX_CHANNELS);
+
+    const float busGain = topology.gain[topology.indexFor(busId)];
+    QVERIFY2(busGain > 0.49f && busGain < 0.51f, "bus gain should be -6 dB in linear form");
+
+    const float groupGain = topology.gain[topology.indexFor(sgId)];
+    QVERIFY2(qFuzzyCompare(groupGain, 1.0f),
+             "group gain is applied per voice; applying it again here would double it");
+
+    // Past the cap a channel gets no index, which the callers read as "straight to
+    // master": its audio still plays, it just carries no inserts.
+    const MixerTopology capped = MixerTopology::build(&pm, 1);
+    QCOMPARE(capped.channelCount(), 1);
+    int mapped = 0;
+    for (const QUuid& id : { busId, sgId }) {
+        if (capped.indexFor(id) >= 0) ++mapped;
+    }
+    QVERIFY2(mapped <= 1, "the cap must not hand out more indices than it allows");
+    QVERIFY2(capped.indexFor(QUuid::createUuid()) == -1, "an unknown channel has no index");
+}
+
+
+void MainTest::testBusGainFoldsIntoGroupVolume() {
+    // The format has no submix, so a bus's gain has to end up inside each group that
+    // feeds it. Decibels compose by addition: -6 into +6 is unity, and unity is omitted.
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = 6.0;
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Cancels";
+    sg->volume = -6.0;
+    sg->outputBusId = busId;
+    Zone z; z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    pm.addNode(std::move(sg));
+
+    auto other = std::make_unique<SampleGroup>();
+    other->name = "Boosted";
+    other->volume = 0.0;
+    other->outputBusId = busId;
+    Zone z2; z2.samplePath = "b.wav";
+    other->zones.push_back(z2);
+    pm.addNode(std::move(other));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // Group names pick up the zone's mic layer as a suffix, so match on the prefix.
+    // -6 + 6 = 0 dB, which setVolumeDb leaves out entirely.
+    const int cancelsAt = xml.indexOf("name=\"Cancels");
+    QVERIFY2(cancelsAt >= 0, qPrintable(xml));
+    const int cancelsEnd = xml.indexOf(">", cancelsAt);
+    QVERIFY2(!xml.mid(cancelsAt, cancelsEnd - cancelsAt).contains("volume="),
+             qPrintable("0 dB should omit the attribute: " + xml.mid(cancelsAt, cancelsEnd - cancelsAt)));
+
+    // 0 + 6 = 6 dB, written with the suffix.
+    QVERIFY2(xml.contains("volume=\"6dB\""), qPrintable(xml));
+}
+
+void MainTest::testBusEffectsReplicatedOntoGroups() {
+    // A bus effect must appear on every group feeding the bus, after that group's own
+    // inserts so signal order survives the flattening.
+    ProjectManager pm;
+
+    auto busFx = std::make_unique<ReverbNode>();
+    const QUuid busFxId = busFx->id;
+    pm.addNode(std::move(busFx));
+
+    auto groupFx = std::make_unique<DelayNode>();
+    const QUuid groupFxId = groupFx->id;
+    pm.addNode(std::move(groupFx));
+
+    auto bus = std::make_unique<BusNode>();
+    bus->insertEffects = { busFxId };
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    for (const char* name : { "One", "Two" }) {
+        auto sg = std::make_unique<SampleGroup>();
+        sg->name = QString::fromLatin1(name);
+        sg->outputBusId = busId;
+        sg->insertEffects = { groupFxId };
+        Zone z; z.samplePath = "a.wav";
+        sg->zones.push_back(z);
+        pm.addNode(std::move(sg));
+    }
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // One reverb per contributing group, not a single shared one.
+    QCOMPARE(xml.count("\"reverb\""), 2);
+
+    // And within each group the delay comes first, then the replicated bus reverb.
+    const int firstDelay = xml.indexOf("\"delay\"");
+    const int firstReverb = xml.indexOf("\"reverb\"");
+    QVERIFY2(firstDelay >= 0 && firstReverb > firstDelay,
+             "the group's own insert must precede the bus insert");
+}
+
+void MainTest::testSynthChildrenInheritBusRoute() {
+    // A synth container is not exported; each generator becomes its own group. A bus on
+    // the container therefore has to reach every one of those generated groups.
+    ProjectManager pm;
+
+    auto busFx = std::make_unique<ChorusNode>();
+    const QUuid busFxId = busFx->id;
+    pm.addNode(std::move(busFx));
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = 3.0;
+    bus->insertEffects = { busFxId };
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto container = std::make_unique<SampleGroup>();
+    container->isSynthContainer = true;
+    container->outputBusId = busId;
+    const QUuid containerId = container->id;
+    pm.addNode(std::move(container));
+
+    for (const char* name : { "Osc1", "Osc2" }) {
+        auto child = std::make_unique<SampleGroup>();
+        child->name = QString::fromLatin1(name);
+        child->synthParentId = containerId;
+        child->isOscillator = true;
+        Zone z; z.samplePath = "";
+        child->zones.push_back(z);
+        pm.addNode(std::move(child));
+    }
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // The container itself is never exported.
+    QVERIFY2(!xml.contains(containerId.toString(QUuid::WithoutBraces)), qPrintable(xml));
+
+    // Both generated groups carry the bus effect and the folded bus gain.
+    QCOMPARE(xml.count("\"chorus\""), 2);
+    QCOMPARE(xml.count("volume=\"3dB\""), 2);
 }
 
 QTEST_MAIN(MainTest)

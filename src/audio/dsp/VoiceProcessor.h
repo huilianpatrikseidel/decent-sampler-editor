@@ -11,7 +11,13 @@ class AUDIOENGINE_EXPORT VoiceProcessor {
 public:
     VoiceProcessor();
     ~VoiceProcessor();
-    
+
+    // Owns m_dataSource, which the destructor uninits. Copying a voice would hand two
+    // objects the same source and double-free it, so the copy ops are deleted rather
+    // than left implicit (dllexport would happily instantiate them on MSVC).
+    VoiceProcessor(const VoiceProcessor&) = delete;
+    VoiceProcessor& operator=(const VoiceProcessor&) = delete;
+
     void initOscillator(const AudioMessage& msg);
     void trigger(const AudioMessage& msg, int rootNote = 60);
     void release();
@@ -29,9 +35,10 @@ public:
     // Must be set (from the audio device rate) before any trigger; defaults to 44100.
     void setSampleRate(double sampleRate) { if (sampleRate > 0.0) m_sampleRate = sampleRate; }
     
-    void process(float lfo1Val, float lfo2Val, float& outL, float& outR, GlobalAudioState* state);
+    void process(const ModInputs& mods, float& outL, float& outR, GlobalAudioState* state);
 
     bool isActive() const { return m_active; }
+    int getChannelIndex() const { return m_channelIndex; }
     int getPlayingNote() const { return m_playingNote; }
     QUuid getGroupId() const { return m_groupId; }
     bool isReleasing() const { return m_adsr.getState() == AdsrEnvelope::Release; }
@@ -61,6 +68,7 @@ private:
     float m_volume;
     float m_smoothedVolume;
     int m_paramBlockIndex = -1;
+    int m_channelIndex = -1;
     QUuid m_groupId;
     
     // Modulation Routingamento

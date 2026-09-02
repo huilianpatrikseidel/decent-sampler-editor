@@ -10,11 +10,18 @@ class UICOMPONENTSLIB_EXPORT FaderWidget : public QWidget {
 public:
     FaderWidget(bool isMaster = false, QWidget* parent = nullptr);
     
-    double value() const { return m_value; }
-    void setValue(double val); // 0.0 to 1.0
-    
+    // Channel volumes are decibels everywhere in the model, so the fader speaks dB on
+    // its public API. The knob position stays normalised internally for painting and
+    // dragging, which is what the track geometry actually needs.
+    double valueDb() const;
+    void setValueDb(double db);
+
+    static constexpr double kMaxDb = 6.0;      // top of travel
+    static constexpr double kFloorDb = -60.0;  // just above the bottom; position 0 is silence
+    static constexpr double kUnityPosition = 0.8; // where 0 dB sits along the track
+
 signals:
-    void valueChanged(double newValue);
+    void valueChanged(double newValueDb);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -25,8 +32,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     
 private:
-    double m_value; // 0.0 to 1.0
-    double m_defaultValue;
+    double m_position;        // 0.0 (silence) .. 1.0 (kMaxDb)
+    double m_defaultPosition; // unity, so a double-click returns to 0 dB
     bool m_dragging;
     int m_lastY;
     int m_capHeight;
@@ -38,4 +45,7 @@ private:
     int trackLength() const { return height() - trackTopMargin() - trackBottomMargin(); }
     int valueToY() const;
     void updateValueFromY(int y);
+    void setPosition(double pos);
+    static double positionToDb(double pos);
+    static double dbToPosition(double db);
 };

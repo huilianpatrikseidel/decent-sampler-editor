@@ -14,4 +14,9 @@ public:
     static bool exportToSfz(const ProjectManager* pm, const QString& outputPath, QString& errorMsg);
     
     static QString getSafeExportName(const QString& originalPath, bool asFlac);
+
+    // Name a sample gets inside a .dsbundle. Encodable WAVs become .flac; anything else
+    // keeps its original extension. The preset XML is written before the zip entries, so
+    // both sides must derive the name from this one function to stay in agreement.
+    static QString getBundleSampleName(const QString& originalPath);
 };

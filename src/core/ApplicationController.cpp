@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QTimer>
 #include <QCoreApplication>
+#include <cstring> // strncpy / strncpy_s — pulled in transitively by GCC, not by MSVC
 
 ApplicationController::ApplicationController(QObject *parent) : QObject(parent) {
     m_vstPluginManager = std::make_unique<VstPluginManager>(&m_projectManager, &m_audioEngine, this);
@@ -61,10 +62,40 @@ void ApplicationController::shutdownSubsystems() {
 
 void ApplicationController::setupConnections() {
     m_midiEngine.setCallback([this](unsigned char status, unsigned char data1, unsigned char data2) {
-        if ((status & 0xF0) == 0x90 && data2 > 0) {
-            playNote(data1, data2);
-        } else if ((status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && data2 == 0)) {
-            stopNote(data1);
+        GlobalAudioState* audioState = m_audioEngine.getAudioState();
+
+        switch (status & 0xF0) {
+            case 0x90: // Note On — running status uses velocity 0 to mean Note Off
+                if (data2 > 0) playNote(data1, data2);
+                else stopNote(data1);
+                break;
+
+            case 0x80: // Note Off
+                stopNote(data1);
+                break;
+
+            case 0xB0: // Control Change — CC 1 is the mod wheel
+                if (data1 == 1) {
+                    audioState->modWheel.store(data2 / 127.0f, std::memory_order_relaxed);
+                }
+                break;
+
+            case 0xE0: { // Pitch Bend — 14 bit, LSB first, centred at 8192
+                const int raw = (static_cast<int>(data2) << 7) | static_cast<int>(data1);
+                audioState->pitchBend.store((raw - 8192) / 8192.0f, std::memory_order_relaxed);
+                break;
+            }
+
+            case 0xD0: // Channel Aftertouch — pressure arrives in data1
+                audioState->aftertouch.store(data1 / 127.0f, std::memory_order_relaxed);
+                break;
+
+            case 0xA0: // Poly Aftertouch — data1 is the note, data2 the pressure
+                audioState->aftertouch.store(data2 / 127.0f, std::memory_order_relaxed);
+                break;
+
+            default:
+                break;
         }
     });
     
@@ -129,6 +160,7 @@ void ApplicationController::playNote(int midiNote, int velocity) {
                 msg.glideTime = z.glideTime;
                 msg.groupId = z.groupId;
                 msg.paramBlockIndex = z.paramBlockIndex;
+                msg.channelIndex = z.channelIndex;
                 
                 msg.hasFilter = z.hasFilter;
                 msg.filterCutoff = z.filterCutoff;

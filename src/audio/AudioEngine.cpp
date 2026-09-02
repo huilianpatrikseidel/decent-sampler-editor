@@ -23,6 +23,11 @@ AudioEngine::~AudioEngine() {
         delete fx;
     }
 
+    auto graph = m_activeMixGraph.exchange(nullptr);
+    if (graph) {
+        delete graph;
+    }
+
 }
 
 void AudioEngine::pushCommand(const AudioMessage& msg) {
@@ -88,6 +93,17 @@ void AudioEngine::setMasterEffectsAsync(std::vector<Vst3Host*>* newEffects) {
 
 
 
+
+void AudioEngine::setMixGraphAsync(MixGraph* newGraph) {
+    std::thread([this, newGraph]() {
+        auto oldGraph = m_activeMixGraph.exchange(newGraph, std::memory_order_acq_rel);
+        if (oldGraph) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50)); // let the callback finish
+            // VstPluginManager owns the hosts; only the graph itself is ours to delete.
+            delete oldGraph;
+        }
+    }).detach();
+}
 
 void AudioEngine::data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     AudioEngine* engine = static_cast<AudioEngine*>(pDevice->pUserData);
@@ -171,6 +187,11 @@ bool AudioEngine::initialize(const QString& deviceId, int sampleRate, int buffer
     m_dryR.resize(maxFrames);
     m_vstOutL.resize(maxFrames);
     m_vstOutR.resize(maxFrames);
+
+    // Allocated up front: the callback may not allocate, so every channel that could
+    // ever exist has its buffer ready before audio starts.
+    m_chanL.assign(MAX_CHANNELS, std::vector<float>(maxFrames, 0.0f));
+    m_chanR.assign(MAX_CHANNELS, std::vector<float>(maxFrames, 0.0f));
 
     m_isInitialized = true;
     return true;
@@ -309,81 +330,141 @@ void AudioEngine::processAudio(float* outputBuffer, ma_uint32 frameCount) {
         }
     }
 
-    float masterVol = m_audioState.masterVolume.load(std::memory_order_relaxed);
-
-    for (ma_uint32 i = 0; i < frameCount * 2; ++i) {
-        outputBuffer[i] = 0.0f;
-    }
-
+    // Fallback for a host asking for a larger buffer than we sized for. This allocates on
+    // the audio thread, which the rules forbid -- but the alternative is indexing past the
+    // end of a channel buffer, which is a crash. It has never been observed to fire; see
+    // docs/04-planning/technical-debt.md.
     if (frameCount > m_dryL.size()) {
-        // Fallback in case host requests surprisingly huge buffer
         m_dryL.resize(frameCount);
         m_dryR.resize(frameCount);
         m_vstOutL.resize(frameCount);
         m_vstOutR.resize(frameCount);
+        for (auto& buffer : m_chanL) buffer.resize(frameCount);
+        for (auto& buffer : m_chanR) buffer.resize(frameCount);
     }
 
-    std::fill(m_dryL.begin(), m_dryL.begin() + frameCount, 0.0f);
-    std::fill(m_dryR.begin(), m_dryR.begin() + frameCount, 0.0f);
+    // Latest MIDI controller positions, sampled once per buffer. The per-frame one-pole
+    // below turns their 7-bit steps into a continuous ramp.
+    const float modWheelTarget = m_audioState.modWheel.load(std::memory_order_relaxed);
+    const float pitchBendTarget = m_audioState.pitchBend.load(std::memory_order_relaxed);
+    const float aftertouchTarget = m_audioState.aftertouch.load(std::memory_order_relaxed);
+    constexpr float kCtrlSmoothing = 0.005f; // same coefficient as the per-voice volume ramp
 
-    for (int frame = 0; frame < frameCount; ++frame) {
-        float mixL = 0.0f;
-        float mixR = 0.0f;
-        
-        float lfo1Val = m_lfo1.process();
-        float lfo2Val = m_lfo2.process();
-        
+    // The graph is published whole and swapped atomically; a null one means every voice
+    // goes straight to master, which is what happens before any project is loaded.
+    MixGraph* graph = m_activeMixGraph.load(std::memory_order_acquire);
+    const int channelCount = graph
+        ? std::min(static_cast<int>(graph->channels.size()), MAX_CHANNELS)
+        : 0;
+
+    for (int c = 0; c < channelCount; ++c) {
+        std::fill(m_chanL[c].begin(), m_chanL[c].begin() + frameCount, 0.0f);
+        std::fill(m_chanR[c].begin(), m_chanR[c].begin() + frameCount, 0.0f);
+    }
+
+    ModInputs mods;
+
+    for (ma_uint32 frame = 0; frame < frameCount; ++frame) {
+        m_smoothedModWheel += kCtrlSmoothing * (modWheelTarget - m_smoothedModWheel);
+        m_smoothedPitchBend += kCtrlSmoothing * (pitchBendTarget - m_smoothedPitchBend);
+        m_smoothedAftertouch += kCtrlSmoothing * (aftertouchTarget - m_smoothedAftertouch);
+
+        mods.lfo1 = m_lfo1.process();
+        mods.lfo2 = m_lfo2.process();
+        mods.modWheel = m_smoothedModWheel;
+        mods.pitchBend = m_smoothedPitchBend;
+        mods.aftertouch = m_smoothedAftertouch;
+
+        float masterL = 0.0f;
+        float masterR = 0.0f;
+
         for (int i = 0; i < MAX_VOICES; ++i) {
-            if (m_voices[i].isActive()) {
-                float vL = 0.0f, vR = 0.0f;
-                m_voices[i].process(lfo1Val, lfo2Val, vL, vR, &m_audioState);
-                mixL += vL;
-                mixR += vR;
+            if (!m_voices[i].isActive()) continue;
+
+            float vL = 0.0f, vR = 0.0f;
+            m_voices[i].process(mods, vL, vR, &m_audioState);
+
+            // A voice whose channel was dropped (or never assigned) still has to be
+            // heard, so it lands on master rather than being discarded.
+            const int channel = m_voices[i].getChannelIndex();
+            if (channel >= 0 && channel < channelCount) {
+                m_chanL[channel][frame] += vL;
+                m_chanR[channel][frame] += vR;
+            } else {
+                masterL += vL;
+                masterR += vR;
             }
         }
-        
-        m_dryL[frame] = mixL * masterVol;
-        m_dryR[frame] = mixR * masterVol;
-    }
-    
-    // Hard clipping before writing to output
-    for (int frame = 0; frame < frameCount; ++frame) {
-        float outL = m_dryL[frame];
-        float outR = m_dryR[frame];
-        if (outL > 1.0f) outL = 1.0f;
-        if (outL < -1.0f) outL = -1.0f;
-        if (outR > 1.0f) outR = 1.0f;
-        if (outR < -1.0f) outR = -1.0f;
-        
-        outputBuffer[frame * 2]     = outL;
-        outputBuffer[frame * 2 + 1] = outR;
+
+        m_dryL[frame] = masterL;
+        m_dryR[frame] = masterR;
     }
 
-    // Now apply VST3 host processing over the final interleaved output buffer
-    std::vector<Vst3Host*>* activeFx = m_activeVstEffects.load(std::memory_order_acquire);
-    if (activeFx && !activeFx->empty()) {
-        float* inputs[2] = { m_dryL.data(), m_dryR.data() };
-        float* outputs[2] = { m_vstOutL.data(), m_vstOutR.data() };
-        
-        for (Vst3Host* host : *activeFx) {
-            if (host) {
+    // Channels are ordered so a channel always precedes the one it feeds, which lets this
+    // run front to back: apply the channel's own inserts, then sum it into its destination.
+    for (int c = 0; c < channelCount; ++c) {
+        const MixChannel& channel = graph->channels[c];
+        float* chL = m_chanL[c].data();
+        float* chR = m_chanR[c].data();
+
+        if (!channel.effects.empty()) {
+            float* inputs[2] = { chL, chR };
+            float* outputs[2] = { m_vstOutL.data(), m_vstOutR.data() };
+            for (Vst3Host* host : channel.effects) {
+                if (!host) continue;
                 host->processAudio(inputs, 2, outputs, 2, frameCount);
-                // Copy outputs back to inputs for the next effect in the chain
                 std::copy(outputs[0], outputs[0] + frameCount, inputs[0]);
                 std::copy(outputs[1], outputs[1] + frameCount, inputs[1]);
             }
         }
-        
-        // Interleave back from the final inputs (which now contain the final output of the chain)
-        for (int frame = 0; frame < frameCount; ++frame) {
-            float outL = inputs[0][frame];
-            float outR = inputs[1][frame];
-            if (outL > 1.0f) outL = 1.0f;
-            if (outL < -1.0f) outL = -1.0f;
-            if (outR > 1.0f) outR = 1.0f;
-            if (outR < -1.0f) outR = -1.0f;
-            outputBuffer[frame * 2]     = outL;
-            outputBuffer[frame * 2 + 1] = outR;
+
+        const float gain = channel.gain;
+        const int dest = channel.destination;
+        float* dstL = (dest >= 0 && dest < channelCount) ? m_chanL[dest].data() : m_dryL.data();
+        float* dstR = (dest >= 0 && dest < channelCount) ? m_chanR[dest].data() : m_dryR.data();
+
+        for (ma_uint32 frame = 0; frame < frameCount; ++frame) {
+            dstL[frame] += chL[frame] * gain;
+            dstR[frame] += chR[frame] * gain;
         }
+    }
+
+    const float masterVol = m_audioState.masterVolume.load(std::memory_order_relaxed);
+    for (ma_uint32 frame = 0; frame < frameCount; ++frame) {
+        m_dryL[frame] *= masterVol;
+        m_dryR[frame] *= masterVol;
+    }
+
+    // Master chain: prefer the graph's list, falling back to the standalone one so an
+    // engine driven without a graph still applies master effects.
+    const std::vector<Vst3Host*>* masterFx = nullptr;
+    if (graph && !graph->masterEffects.empty()) {
+        masterFx = &graph->masterEffects;
+    } else if (auto* legacy = m_activeVstEffects.load(std::memory_order_acquire)) {
+        if (!legacy->empty()) masterFx = legacy;
+    }
+
+    float* finalL = m_dryL.data();
+    float* finalR = m_dryR.data();
+    if (masterFx) {
+        float* inputs[2] = { finalL, finalR };
+        float* outputs[2] = { m_vstOutL.data(), m_vstOutR.data() };
+        for (Vst3Host* host : *masterFx) {
+            if (!host) continue;
+            host->processAudio(inputs, 2, outputs, 2, frameCount);
+            std::copy(outputs[0], outputs[0] + frameCount, inputs[0]);
+            std::copy(outputs[1], outputs[1] + frameCount, inputs[1]);
+        }
+    }
+
+    for (ma_uint32 frame = 0; frame < frameCount; ++frame) {
+        float outL = finalL[frame];
+        float outR = finalR[frame];
+        if (outL > 1.0f) outL = 1.0f;
+        if (outL < -1.0f) outL = -1.0f;
+        if (outR > 1.0f) outR = 1.0f;
+        if (outR < -1.0f) outR = -1.0f;
+        outputBuffer[frame * 2]     = outL;
+        outputBuffer[frame * 2 + 1] = outR;
     }
 }

@@ -1,20 +1,20 @@
 #pragma once
 
-class SampleGroup;
-class BusNode;
-class DelayNode;
-class ReverbNode;
-class FilterNode;
-class ChorusNode;
+struct SampleGroup;
+struct BusNode;
+struct DelayNode;
+struct ReverbNode;
+struct FilterNode;
+struct ChorusNode;
 class CompressorNode;
-class GainNode;
-class PhaserNode;
-class PitchShifterNode;
-class WaveFolderNode;
-class WaveShaperNode;
-class StereoSimulatorNode;
-class BitCrusherNode;
-class EqualizerNode;
+struct GainNode;
+struct PhaserNode;
+struct PitchShifterNode;
+struct WaveFolderNode;
+struct WaveShaperNode;
+struct StereoSimulatorNode;
+struct BitCrusherNode;
+struct EqualizerNode;
 
 class INodeVisitor {
 public:

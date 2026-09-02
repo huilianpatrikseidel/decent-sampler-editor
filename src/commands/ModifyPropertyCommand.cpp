@@ -38,6 +38,8 @@ void ModifyPropertyCommand::applyValue(const QVariant& val) {
         else if (m_propertyPath == "silencedByTags") sg->silencedByTags = val.toString();
         else if (m_propertyPath == "silencingMode") sg->silencingMode = val.toString();
         else if (m_propertyPath == "isOscillator") sg->isOscillator = val.toBool();
+        // Serialised as a string so the undo stack carries a plain QVariant.
+        else if (m_propertyPath == "outputBusId") sg->outputBusId = QUuid(val.toString());
         else if (m_propertyPath == "oscParams") {
             QJsonObject o = val.toJsonObject();
             sg->oscParams.waveform = o["waveform"].toString("sine");
@@ -62,6 +64,7 @@ void ModifyPropertyCommand::applyValue(const QVariant& val) {
     } else if (node->type == "Bus") {
         BusNode* bus = static_cast<BusNode*>(node);
         if (m_propertyPath == "volume") bus->volume = val.toDouble();
+        else if (m_propertyPath == "outputBusId") bus->outputBusId = QUuid(val.toString());
     } else if (node->type == "Delay") {
         DelayNode* d = static_cast<DelayNode*>(node);
         if (m_propertyPath == "time") d->time = val.toDouble();

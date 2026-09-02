@@ -58,6 +58,7 @@ void VoiceProcessor::trigger(const AudioMessage& msg, int rootNote) {
     m_rootNote = rootNote;
     m_groupId = msg.groupId;
     m_paramBlockIndex = msg.paramBlockIndex;
+    m_channelIndex = msg.channelIndex;
     float velNorm = msg.velocity / 127.0f;
     m_volume = msg.volume * velNorm;
     m_smoothedVolume = 1.0f;
@@ -150,7 +151,7 @@ float VoiceProcessor::hermite(float frac, float xm1, float x0, float x1, float x
     return ((((a * frac) - b_neg) * frac + c) * frac + x0);
 }
 
-void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& outR, GlobalAudioState* state) {
+void VoiceProcessor::process(const ModInputs& mods, float& outL, float& outR, GlobalAudioState* state) {
     if (!m_active) {
         outL = 0.0f;
         outR = 0.0f;
@@ -196,11 +197,14 @@ void VoiceProcessor::process(float lfo1Val, float lfo2Val, float& outL, float& o
     for (int i = 0; i < m_numRoutings; ++i) {
         float sourceVal = 0.0f;
         switch (m_routings[i].source) {
-            case ModSource::LFO1: sourceVal = lfo1Val; break;
-            case ModSource::LFO2: sourceVal = lfo2Val; break;
+            case ModSource::LFO1: sourceVal = mods.lfo1; break;
+            case ModSource::LFO2: sourceVal = mods.lfo2; break;
             case ModSource::Env1: sourceVal = envAmp; break;
             case ModSource::Env2: sourceVal = modEnvAmp; break;
             case ModSource::Velocity: sourceVal = m_velocity; break;
+            case ModSource::ModWheel: sourceVal = mods.modWheel; break;
+            case ModSource::PitchBend: sourceVal = mods.pitchBend; break;
+            case ModSource::Aftertouch: sourceVal = mods.aftertouch; break;
             default: break;
         }
         

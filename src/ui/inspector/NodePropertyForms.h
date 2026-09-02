@@ -4,7 +4,7 @@
 #include <map>
 #include <QUuid>
 
-class Node;
+struct Node;
 class PropertiesInspector;
 class QFormLayout;
 

@@ -13,6 +13,14 @@ public:
     explicit DsNode(const QString& tagName);
     virtual ~DsNode() = default;
 
+    // Move-only by design: the node owns its children. The explicit deletes also keep
+    // MSVC from instantiating the copy operations, which dllexport would otherwise force
+    // — and that instantiation fails (C2280) on the move-only m_children vector.
+    DsNode(const DsNode&) = delete;
+    DsNode& operator=(const DsNode&) = delete;
+    DsNode(DsNode&&) = delete;
+    DsNode& operator=(DsNode&&) = delete;
+
     void setAttribute(const QString& name, const QString& value);
     void setAttribute(const QString& name, int value);
     void setAttribute(const QString& name, long long value);
@@ -43,7 +51,11 @@ protected:
 class CORELIB_EXPORT DsDocument : public DsNode {
 public:
     DsDocument();
-    
+
+    // Non-copyable for the same reason as the DsNode base (see above).
+    DsDocument(const DsDocument&) = delete;
+    DsDocument& operator=(const DsDocument&) = delete;
+
     // Helper to generate the entire XML string
     QString toXmlString() const;
     
