@@ -41,7 +41,12 @@ no-op.
 **Bridge.** On export the bus is flattened: its insert chain is **replicated into every
 group that feeds it**, and its gain is **folded into each group's volume**. A group at
 −6 dB feeding a bus at +6 dB exports as a group at 0 dB — which, per the volume rule
-below, means the attribute is omitted entirely.
+below, means the attribute is omitted entirely. Chains compose nearest-first, so a group's
+own inserts still run before the bus's. See `busChain` in `DsGroupBuilder`.
+
+Buses may feed buses; the whole chain is folded. A synth child with no route of its own
+inherits the container's, since the container is not exported and would otherwise take its
+bus with it.
 
 **Accepted inaccuracy.** A bus effect runs *once* over the summed groups during
 audition, but becomes *N independent instances* after export. For linear effects (gain,

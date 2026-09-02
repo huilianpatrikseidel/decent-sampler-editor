@@ -2,6 +2,7 @@
 #include "DsEffectBuilder.h"
 #include "../../export/BundleExporter.h"
 #include "../../core/INodeVisitor.h"
+#include <QSet>
 
 namespace {
 // Volumes are decibels in the model. Decent Sampler only reads them that way when the
@@ -14,6 +15,26 @@ void setVolumeDb(DsNode* node, double db) {
 }
 } // namespace
 
+
+namespace {
+// Buses a channel feeds, nearest first. Decent Sampler has no submix, so on export a bus
+// is dissolved into the groups that feed it: its gain is folded into their volume and its
+// insert chain is replicated onto each of them. Bounded rather than trusting the graph --
+// routing refuses cycles, but a hand-edited project could still contain one.
+QList<const BusNode*> busChain(const ProjectManager* pm, const QUuid& start) {
+    QList<const BusNode*> chain;
+    QSet<QUuid> seen;
+    QUuid cursor = start;
+    while (!cursor.isNull() && !seen.contains(cursor)) {
+        seen.insert(cursor);
+        Node* n = pm->getNode(cursor);
+        if (!n || n->type != "Bus") break;
+        chain.append(static_cast<const BusNode*>(n));
+        cursor = pm->getOutputBus(cursor);
+    }
+    return chain;
+}
+} // namespace
 
 void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, bool isBundle) {
     class GroupsVisitor : public INodeVisitor {
@@ -64,6 +85,23 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                     effGlideTime = parentSg->glideTime;
                     effRoutings.append(parentSg->routings);
                 }
+            }
+
+            // A synth child with no route of its own inherits the container's, the same
+            // way it inherits trigger and seqMode above.
+            QUuid routeStart = sg->outputBusId;
+            if (routeStart.isNull() && !sg->synthParentId.isNull()) {
+                Node* pNode = pm->getNode(sg->synthParentId);
+                if (pNode && pNode->type == "SampleGroup") {
+                    routeStart = static_cast<SampleGroup*>(pNode)->outputBusId;
+                }
+            }
+
+            const QList<const BusNode*> buses = busChain(pm, routeStart);
+            // Decibels compose by addition: -6 dB on the group into +6 dB on the bus is
+            // 0 dB, which setVolumeDb then omits entirely.
+            for (const BusNode* bus : buses) {
+                effVolume += bus->volume;
             }
             
             for (const QString& mic : micLayers) {
@@ -214,6 +252,13 @@ void DsGroupBuilder::buildGroups(DsNode* rootGroups, const ProjectManager* pm, b
                 QList<Node*> localEffects;
                 for (const QUuid& fxId : sg->insertEffects) {
                     if (Node* fx = pm->getNode(fxId)) localEffects.append(fx);
+                }
+                // Then every bus this group feeds, nearest first, so signal order is
+                // preserved: the group's own inserts run before the bus's.
+                for (const BusNode* bus : buses) {
+                    for (const QUuid& fxId : bus->insertEffects) {
+                        if (Node* fx = pm->getNode(fxId)) localEffects.append(fx);
+                    }
                 }
                 if (!localEffects.isEmpty()) {
                     DsNode* effectsNode = groupNode->addChild("effects");

@@ -47,6 +47,12 @@ they carry no ordering, and chain order changes the sound. Group effects are emi
 effect, counting what is actually emitted: a bypassed node contributes nothing, and an
 equalizer contributes one element per band.
 
+## Buses
+
+Buses do not survive export. Each group folds the gain of every bus it feeds into its own
+volume, and appends those buses' insert chains after its own. `busChain` in
+`DsGroupBuilder` resolves the chain, bounded so a hand-edited cycle cannot hang the export.
+
 ## Where the model and the format disagree
 
 Synth containers, buses, round-robin modes, convolution reverb and multi-band EQ all need

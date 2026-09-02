@@ -103,7 +103,7 @@ the ordering test was confirmed to fail with the sort inverted.
 > The render path is in place and the application runs, but this has not been confirmed
 > by ear with a loaded instrument.
 
-## Stage 5 — bus flattening on export
+## Stage 5 — bus flattening on export — **done**
 
 For each group, walk the `outputBusId` chain and compose:
 
@@ -112,8 +112,17 @@ For each group, walk the `outputBusId` chain and compose:
 
 Must compose with the synth case, where a child already adds its container's volume.
 
-*Verify:* a group at −6 dB into a bus at +6 dB exports with no `volume` attribute and the
-bus effect replicated; the same holds for every group a synth container fans out into.
+A synth child with no route of its own inherits the container's, the same way it already
+inherits `trigger` and `seqMode`. Without that, a bus on the container would reach nothing,
+since the container itself is never exported.
+
+Covered by `testBusGainFoldsIntoGroupVolume`, `testBusEffectsReplicatedOntoGroups` and
+`testSynthChildrenInheritBusRoute`. Both halves were sentinelled: removing the gain fold
+and removing the effect replication each turn tests red.
+
+With this the round is complete — what you hear while auditioning is what the exported
+preset produces, within the approximation recorded in
+[../02-architecture/workarounds.md](../02-architecture/workarounds.md).
 
 ## Risks
 

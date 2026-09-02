@@ -74,6 +74,11 @@ private slots:
     void testDecentSamplerTranspiler();
     void testSfzTranspiler();
 
+    // BusFlatteningTest
+    void testBusGainFoldsIntoGroupVolume();
+    void testBusEffectsReplicatedOntoGroups();
+    void testSynthChildrenInheritBusRoute();
+
     // MixerTopologyTest
     void testTopologyOrdersSourcesBeforeDestinations();
     void testTopologyGainAndOverflow();
@@ -974,6 +979,131 @@ void MainTest::testTopologyGainAndOverflow() {
     }
     QVERIFY2(mapped <= 1, "the cap must not hand out more indices than it allows");
     QVERIFY2(capped.indexFor(QUuid::createUuid()) == -1, "an unknown channel has no index");
+}
+
+
+void MainTest::testBusGainFoldsIntoGroupVolume() {
+    // The format has no submix, so a bus's gain has to end up inside each group that
+    // feeds it. Decibels compose by addition: -6 into +6 is unity, and unity is omitted.
+    ProjectManager pm;
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = 6.0;
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto sg = std::make_unique<SampleGroup>();
+    sg->name = "Cancels";
+    sg->volume = -6.0;
+    sg->outputBusId = busId;
+    Zone z; z.samplePath = "a.wav";
+    sg->zones.push_back(z);
+    pm.addNode(std::move(sg));
+
+    auto other = std::make_unique<SampleGroup>();
+    other->name = "Boosted";
+    other->volume = 0.0;
+    other->outputBusId = busId;
+    Zone z2; z2.samplePath = "b.wav";
+    other->zones.push_back(z2);
+    pm.addNode(std::move(other));
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // Group names pick up the zone's mic layer as a suffix, so match on the prefix.
+    // -6 + 6 = 0 dB, which setVolumeDb leaves out entirely.
+    const int cancelsAt = xml.indexOf("name=\"Cancels");
+    QVERIFY2(cancelsAt >= 0, qPrintable(xml));
+    const int cancelsEnd = xml.indexOf(">", cancelsAt);
+    QVERIFY2(!xml.mid(cancelsAt, cancelsEnd - cancelsAt).contains("volume="),
+             qPrintable("0 dB should omit the attribute: " + xml.mid(cancelsAt, cancelsEnd - cancelsAt)));
+
+    // 0 + 6 = 6 dB, written with the suffix.
+    QVERIFY2(xml.contains("volume=\"6dB\""), qPrintable(xml));
+}
+
+void MainTest::testBusEffectsReplicatedOntoGroups() {
+    // A bus effect must appear on every group feeding the bus, after that group's own
+    // inserts so signal order survives the flattening.
+    ProjectManager pm;
+
+    auto busFx = std::make_unique<ReverbNode>();
+    const QUuid busFxId = busFx->id;
+    pm.addNode(std::move(busFx));
+
+    auto groupFx = std::make_unique<DelayNode>();
+    const QUuid groupFxId = groupFx->id;
+    pm.addNode(std::move(groupFx));
+
+    auto bus = std::make_unique<BusNode>();
+    bus->insertEffects = { busFxId };
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    for (const char* name : { "One", "Two" }) {
+        auto sg = std::make_unique<SampleGroup>();
+        sg->name = QString::fromLatin1(name);
+        sg->outputBusId = busId;
+        sg->insertEffects = { groupFxId };
+        Zone z; z.samplePath = "a.wav";
+        sg->zones.push_back(z);
+        pm.addNode(std::move(sg));
+    }
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // One reverb per contributing group, not a single shared one.
+    QCOMPARE(xml.count("\"reverb\""), 2);
+
+    // And within each group the delay comes first, then the replicated bus reverb.
+    const int firstDelay = xml.indexOf("\"delay\"");
+    const int firstReverb = xml.indexOf("\"reverb\"");
+    QVERIFY2(firstDelay >= 0 && firstReverb > firstDelay,
+             "the group's own insert must precede the bus insert");
+}
+
+void MainTest::testSynthChildrenInheritBusRoute() {
+    // A synth container is not exported; each generator becomes its own group. A bus on
+    // the container therefore has to reach every one of those generated groups.
+    ProjectManager pm;
+
+    auto busFx = std::make_unique<ChorusNode>();
+    const QUuid busFxId = busFx->id;
+    pm.addNode(std::move(busFx));
+
+    auto bus = std::make_unique<BusNode>();
+    bus->volume = 3.0;
+    bus->insertEffects = { busFxId };
+    const QUuid busId = bus->id;
+    pm.addNode(std::move(bus));
+
+    auto container = std::make_unique<SampleGroup>();
+    container->isSynthContainer = true;
+    container->outputBusId = busId;
+    const QUuid containerId = container->id;
+    pm.addNode(std::move(container));
+
+    for (const char* name : { "Osc1", "Osc2" }) {
+        auto child = std::make_unique<SampleGroup>();
+        child->name = QString::fromLatin1(name);
+        child->synthParentId = containerId;
+        child->isOscillator = true;
+        Zone z; z.samplePath = "";
+        child->zones.push_back(z);
+        pm.addNode(std::move(child));
+    }
+
+    DecentSamplerTranspiler transpiler;
+    const QString xml = transpiler.generate(&pm);
+
+    // The container itself is never exported.
+    QVERIFY2(!xml.contains(containerId.toString(QUuid::WithoutBraces)), qPrintable(xml));
+
+    // Both generated groups carry the bus effect and the folded bus gain.
+    QCOMPARE(xml.count("\"chorus\""), 2);
+    QCOMPARE(xml.count("volume=\"3dB\""), 2);
 }
 
 QTEST_MAIN(MainTest)
